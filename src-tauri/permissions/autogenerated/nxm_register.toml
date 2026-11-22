@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-nxm-register"
+description = "Enables the nxm_register command without any pre-configured scope."
+commands.allow = ["nxm_register"]
+
+[[permission]]
+identifier = "deny-nxm-register"
+description = "Denies the nxm_register command without any pre-configured scope."
+commands.deny = ["nxm_register"]

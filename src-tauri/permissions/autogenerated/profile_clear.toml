@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-clear"
+description = "Enables the profile_clear command without any pre-configured scope."
+commands.allow = ["profile_clear"]
+
+[[permission]]
+identifier = "deny-profile-clear"
+description = "Denies the profile_clear command without any pre-configured scope."
+commands.deny = ["profile_clear"]

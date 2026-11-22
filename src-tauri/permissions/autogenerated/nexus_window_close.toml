@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-nexus-window-close"
+description = "Enables the nexus_window_close command without any pre-configured scope."
+commands.allow = ["nexus_window_close"]
+
+[[permission]]
+identifier = "deny-nexus-window-close"
+description = "Denies the nexus_window_close command without any pre-configured scope."
+commands.deny = ["nexus_window_close"]

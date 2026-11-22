@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-apply"
+description = "Enables the profile_apply command without any pre-configured scope."
+commands.allow = ["profile_apply"]
+
+[[permission]]
+identifier = "deny-profile-apply"
+description = "Denies the profile_apply command without any pre-configured scope."
+commands.deny = ["profile_apply"]

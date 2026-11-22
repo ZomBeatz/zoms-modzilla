@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-queue-add-collection"
+description = "Enables the queue_add_collection command without any pre-configured scope."
+commands.allow = ["queue_add_collection"]
+
+[[permission]]
+identifier = "deny-queue-add-collection"
+description = "Denies the queue_add_collection command without any pre-configured scope."
+commands.deny = ["queue_add_collection"]

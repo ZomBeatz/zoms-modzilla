@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mod-files"
+description = "Enables the mod_files command without any pre-configured scope."
+commands.allow = ["mod_files"]
+
+[[permission]]
+identifier = "deny-mod-files"
+description = "Denies the mod_files command without any pre-configured scope."
+commands.deny = ["mod_files"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mod-notes"
+description = "Enables the mod_notes command without any pre-configured scope."
+commands.allow = ["mod_notes"]
+
+[[permission]]
+identifier = "deny-mod-notes"
+description = "Denies the mod_notes command without any pre-configured scope."
+commands.deny = ["mod_notes"]

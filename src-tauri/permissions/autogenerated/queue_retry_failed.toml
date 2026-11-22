@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-queue-retry-failed"
+description = "Enables the queue_retry_failed command without any pre-configured scope."
+commands.allow = ["queue_retry_failed"]
+
+[[permission]]
+identifier = "deny-queue-retry-failed"
+description = "Denies the queue_retry_failed command without any pre-configured scope."
+commands.deny = ["queue_retry_failed"]

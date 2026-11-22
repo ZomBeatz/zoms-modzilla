@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-queue-clear-finished"
+description = "Enables the queue_clear_finished command without any pre-configured scope."
+commands.allow = ["queue_clear_finished"]
+
+[[permission]]
+identifier = "deny-queue-clear-finished"
+description = "Denies the queue_clear_finished command without any pre-configured scope."
+commands.deny = ["queue_clear_finished"]

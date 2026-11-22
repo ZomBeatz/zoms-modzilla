@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Zom's Nexus",
+  "mainBinaryName": "zoms-nexus",
+  "version": "0.1.0",
+  "identifier": "com.zombeatz.zoms-nexus",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1440",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Zom's Nexus",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 860,
+        "minHeight": 560,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://staticdelivery.nexusmods.com https://*.nexusmods.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "category": "Utility",
+    "shortDescription": "Download and keep mods from Nexus Mods on Linux",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "publisher": "ZomBeatz Media",
+    "copyright": "\u00a9 ZomBeatz Media",
+    "license": "MIT",
+    "linux": {
+      "deb": {
+        "desktopTemplate": "desktop.template"
+      },
+      "rpm": {
+        "desktopTemplate": "desktop.template"
+      }
+    }
+  }
+}

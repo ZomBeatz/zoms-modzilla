@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-resolve"
+description = "Enables the profile_resolve command without any pre-configured scope."
+commands.allow = ["profile_resolve"]
+
+[[permission]]
+identifier = "deny-profile-resolve"
+description = "Denies the profile_resolve command without any pre-configured scope."
+commands.deny = ["profile_resolve"]

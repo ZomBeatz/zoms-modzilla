@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-import"
+description = "Enables the profile_import command without any pre-configured scope."
+commands.allow = ["profile_import"]
+
+[[permission]]
+identifier = "deny-profile-import"
+description = "Denies the profile_import command without any pre-configured scope."
+commands.deny = ["profile_import"]

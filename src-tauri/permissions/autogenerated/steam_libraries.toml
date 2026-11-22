@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-steam-libraries"
+description = "Enables the steam_libraries command without any pre-configured scope."
+commands.allow = ["steam_libraries"]
+
+[[permission]]
+identifier = "deny-steam-libraries"
+description = "Denies the steam_libraries command without any pre-configured scope."
+commands.deny = ["steam_libraries"]

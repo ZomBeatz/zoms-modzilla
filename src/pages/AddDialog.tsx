@@ -143,6 +143,19 @@ export function AddDialog({ overview, toast, go, onClose, initial }: Ctx & { onC
           <span>· {collection.game}</span>
         </div>
         {collection.summary && <p className="muted" style={{ marginTop: 0 }}>{collection.summary}</p>}
+        {(() => {
+          // Archives, plus their unpacked files (about the same again, more for compressed
+          // textures); the archives go once unpacked unless they're kept.
+          const down = files.reduce((n, f) => n + f.size, 0);
+          const need = down * (overview.settings.extract ? (overview.settings.keepArchives ? 2.2 : 1.3) : 1);
+          const free = overview.freeSpace;
+          if (free == null || need <= free * 0.95) return null;
+          return (
+            <p className="collection-note warn-text small" style={{ marginTop: 0 }}>
+              This needs about {bytes(need)} on the library's drive ({bytes(down)} of downloads{overview.settings.extract ? ", plus unpacking" : ""}), and it has {bytes(free)} free. Free some space first (Library › Review space), or the downloads will stop when the drive is full.
+            </p>
+          );
+        })()}
         <div className="notice">
           <Info size={16} />
           <div>

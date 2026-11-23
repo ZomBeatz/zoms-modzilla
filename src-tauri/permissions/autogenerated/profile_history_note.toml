@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-history-note"
+description = "Enables the profile_history_note command without any pre-configured scope."
+commands.allow = ["profile_history_note"]
+
+[[permission]]
+identifier = "deny-profile-history-note"
+description = "Denies the profile_history_note command without any pre-configured scope."
+commands.deny = ["profile_history_note"]

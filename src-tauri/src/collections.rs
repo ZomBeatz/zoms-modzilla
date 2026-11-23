@@ -72,11 +72,15 @@ pub struct Collection {
     pub summary: Option<String>,
     pub picture_url: Option<String>,
     pub files: Vec<CollectionFile>,
+    /// Where the revision's own archive (collection.json) is; never shown to the page.
+    #[serde(skip)]
+    pub download_link: Option<String>,
 }
 
 const QUERY: &str = "query ZomsNexusCollection($slug: String!, $revision: Int, $adult: Boolean) {
   collectionRevision(slug: $slug, revision: $revision, viewAdultContent: $adult) {
     revisionNumber
+    downloadLink
     collection { name summary tileImage { url } user { name } game { domainName } }
     modFiles {
       fileId
@@ -123,6 +127,7 @@ pub fn read(addr: &Address, data: &Value) -> Result<Collection, String> {
         summary: text(&c["summary"]),
         picture_url: text(&c["tileImage"]["url"]),
         files,
+        download_link: text(&rev["downloadLink"]),
     })
 }
 
@@ -131,9 +136,69 @@ pub async fn fetch(nexus: &Nexus, addr: &Address) -> Result<Collection, ApiError
     read(addr, &data).map_err(|message| ApiError { status: 404, message })
 }
 
+/// The curator's installer choices in a collection.json, by mod and file number.
+/// Shape: mods[].source.{modId,fileId} and mods[].choices = {type:"fomod", options:[{name,
+/// groups:[{name, choices:[{name, idx}]}]}]}. Names are kept exactly (some start with spaces).
+pub fn choices_in(manifest: &Value) -> Vec<(u64, u64, Vec<crate::fomod::Choice>)> {
+    let mut out = vec![];
+    for m in manifest["mods"].as_array().map(Vec::as_slice).unwrap_or(&[]) {
+        let ch = &m["choices"];
+        if ch["type"].as_str() != Some("fomod") {
+            continue;
+        }
+        let (Some(mod_id), Some(file_id)) = (num(&m["source"]["modId"]), num(&m["source"]["fileId"])) else { continue };
+        let mut picks = vec![];
+        for step in ch["options"].as_array().map(Vec::as_slice).unwrap_or(&[]) {
+            for g in step["groups"].as_array().map(Vec::as_slice).unwrap_or(&[]) {
+                let plugins: Vec<String> = g["choices"].as_array().map(Vec::as_slice).unwrap_or(&[]).iter().filter_map(|c| c["name"].as_str().map(String::from)).collect();
+                picks.push(crate::fomod::Choice { step: step["name"].as_str().unwrap_or("").to_string(), group: g["name"].as_str().unwrap_or("").to_string(), plugins });
+            }
+        }
+        if !picks.is_empty() {
+            out.push((mod_id, file_id, picks));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_curator_choices() {
+        let v = json!({ "mods": [
+            { "name": "Snow", "source": { "type": "nexus", "modId": 5, "fileId": 50 }, "choices": { "type": "fomod", "options": [ { "name": " Look", "groups": [ { "name": "Snow", "choices": [ { "name": "Hard", "idx": 1 } ] } ] } ] } },
+            { "name": "Plain", "source": { "modId": 6, "fileId": 60 } },
+            { "name": "Odd", "source": { "modId": "7", "fileId": "70" }, "choices": { "options": [] } }
+        ]});
+        let c = choices_in(&v);
+        assert_eq!(c.len(), 1);
+        assert_eq!((c[0].0, c[0].1), (5, 50));
+        assert_eq!(c[0].2[0].step, " Look", "names kept exactly");
+        assert_eq!(c[0].2[0].plugins, vec!["Hard".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn fetches_the_collection_file_through_a_link_list() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut s, _) = l.accept().await.unwrap();
+                let mut buf = [0u8; 2048];
+                let n = s.read(&mut buf).await.unwrap();
+                let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                let (kind, body) = if req.starts_with("GET /link") { ("application/json", format!("{{\"download_links\":[{{\"URI\":\"http://{addr}/file\"}}]}}")) } else { ("application/octet-stream", "PKDATA".to_string()) };
+                let _ = s.write_all(format!("HTTP/1.1 200 OK\r\ncontent-type: {kind}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}", body.len()).as_bytes()).await;
+            }
+        });
+        let n = Nexus::new(Some("k".into())).with_base(&format!("http://{addr}/v1"));
+        let got = n.collection_archive("/link", 1000).await.unwrap();
+        assert_eq!(got, b"PKDATA");
+        assert!(n.collection_archive("https://evil.example.com/x", 1000).await.is_err(), "never other hosts");
+    }
 
     #[test]
     fn reads_collection_addresses() {

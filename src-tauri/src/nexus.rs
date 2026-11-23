@@ -163,6 +163,15 @@ impl std::fmt::Display for ApiError {
     }
 }
 
+/// A game on Nexus Mods.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NexusGame {
+    pub domain: String,
+    pub name: String,
+    pub mods: u64,
+}
+
 /// Told the new numbers whenever an answer from Nexus Mods changes them.
 pub type LimitsListener = Arc<dyn Fn(&RateLimit) + Send + Sync>;
 
@@ -239,6 +248,24 @@ impl Nexus {
         }
     }
 
+    /// Every game on Nexus Mods: (domain, name, number of mods). One request.
+    pub async fn games(&self) -> Result<Vec<NexusGame>, ApiError> {
+        let v: serde_json::Value = self.get("/games.json", &[]).await?;
+        Ok(v.as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|g| {
+                        Some(NexusGame {
+                            domain: g["domain_name"].as_str()?.to_string(),
+                            name: g["name"].as_str()?.to_string(),
+                            mods: g["mods"].as_u64().unwrap_or(0),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
     pub fn key(&self) -> Option<String> {
         self.key.lock().unwrap().clone()
     }
@@ -277,8 +304,10 @@ impl Nexus {
             return res.json::<T>().await.map_err(|e| ApiError { status, message: format!("Nexus Mods sent an answer the app couldn't read. ({e})") });
         }
         let said = res.json::<raw::Message>().await.ok().and_then(|m| m.message).unwrap_or_default();
+        crate::log::warn(&format!("Nexus Mods answered {status} for {path}{}", if said.is_empty() { String::new() } else { format!(": {said}") }));
         let message = match status {
             401 => "Nexus Mods didn't accept the API key. Copy it again from nexusmods.com > Settings > API keys.".to_string(),
+            403 if said.starts_with("Mod not available") => "Nexus Mods doesn't show this mod any more: its author hid it, or it was removed. It can't be downloaded; its page may say what replaced it.".to_string(),
             403 => if said.is_empty() { "Nexus Mods said no to this download.".to_string() } else { said },
             404 => "Nexus Mods couldn't find that mod or file. It may have been removed or hidden.".to_string(),
             410 => "That download link has run out. Click Mod manager download on Nexus Mods again.".to_string(),
@@ -317,9 +346,71 @@ impl Nexus {
         Ok(body.get("data").cloned().unwrap_or_default())
     }
 
+    /// A collection revision's own archive (its collection.json: installer choices, notes), from
+    /// the `downloadLink` the collection lookup gives. A relative link is on the API's host; an
+    /// answer listing links is followed to the first. The key only goes to nexusmods.com hosts,
+    /// and at most `max` bytes are read.
+    pub async fn collection_archive(&self, link: &str, max: u64) -> Result<Vec<u8>, ApiError> {
+        let fail = |m: String| ApiError { status: 0, message: m };
+        let origin = url::Url::parse(&self.base).map(|u| u.origin().ascii_serialization()).unwrap_or_else(|_| "https://api.nexusmods.com".into());
+        let mut url = if link.starts_with('/') { format!("{origin}{link}") } else { link.to_string() };
+        for _ in 0..2 {
+            let u = url::Url::parse(&url).map_err(|_| fail("The collection's download link isn't an address.".into()))?;
+            let host = u.host_str().unwrap_or("").to_ascii_lowercase();
+            let nexus = host == "nexusmods.com" || host.ends_with(".nexusmods.com") || (cfg!(test) && host == "127.0.0.1");
+            if u.scheme() != "https" && !(cfg!(test) && u.scheme() == "http") {
+                return Err(fail("The collection's download link isn't secure.".into()));
+            }
+            if !nexus && !host.ends_with(".nexus-cdn.com") && host != "nexus-cdn.com" {
+                return Err(fail(format!("The collection's download link points somewhere unexpected ({host}).")));
+            }
+            let mut req = self.http.get(u).header("Application-Name", APP_NAME).header("Application-Version", APP_VERSION);
+            if nexus {
+                if let Some(k) = self.key.lock().unwrap().clone() {
+                    req = req.header("apikey", k);
+                }
+            }
+            let res = req.send().await.map_err(|e| fail(format!("Couldn't reach Nexus Mods ({e}).")))?;
+            if nexus {
+                self.note_limits(res.headers());
+            }
+            let status = res.status().as_u16();
+            if status >= 400 {
+                return Err(ApiError { status, message: format!("Nexus Mods didn't hand out the collection's file ({status}).") });
+            }
+            if res.content_length().is_some_and(|n| n > max) {
+                return Err(fail("The collection's file is bigger than expected.".into()));
+            }
+            let json = res.headers().get("content-type").and_then(|v| v.to_str().ok()).is_some_and(|t| t.contains("json"));
+            let mut body = Vec::new();
+            let mut stream = res.bytes_stream();
+            use futures_util::StreamExt;
+            while let Some(chunk) = stream.next().await {
+                body.extend_from_slice(&chunk.map_err(|e| fail(format!("The download stopped ({e}).")))?);
+                if body.len() as u64 > max {
+                    return Err(fail("The collection's file is bigger than expected.".into()));
+                }
+            }
+            if !json {
+                return Ok(body);
+            }
+            // {"download_links":[{"URI":...}]} or [{"URI":...}]: follow the first.
+            let v: serde_json::Value = serde_json::from_slice(&body).map_err(|_| fail("Nexus Mods' answer about the collection's file couldn't be read.".into()))?;
+            let list = v.get("download_links").unwrap_or(&v);
+            url = list.get(0).and_then(|x| x.get("URI").or_else(|| x.get("uri"))).and_then(|x| x.as_str()).ok_or_else(|| fail("Nexus Mods gave no link for the collection's file.".into()))?.to_string();
+        }
+        Err(fail("Nexus Mods kept pointing elsewhere for the collection's file.".into()))
+    }
+
     pub async fn validate(&self) -> Result<User, ApiError> {
         let u: raw::User = self.get("/users/validate.json", &[]).await?;
         Ok(User { user_id: u.user_id, name: u.name, is_premium: u.is_premium, profile_url: u.profile_url })
+    }
+
+    /// A mod's changelog, newest version first (one request).
+    pub async fn changelog(&self, game: &str, mod_id: u64) -> Result<Vec<Change>, ApiError> {
+        let v: serde_json::Value = self.get(&format!("/games/{game}/mods/{mod_id}/changelogs.json"), &[]).await?;
+        Ok(changes_from(&v))
     }
 
     pub async fn mod_info(&self, game: &str, mod_id: u64) -> Result<ModInfo, ApiError> {
@@ -403,5 +494,63 @@ impl Nexus {
         }
         let links: Vec<raw::Link> = self.get(&format!("/games/{game}/mods/{mod_id}/files/{file_id}/download_link.json"), &q).await?;
         links.into_iter().next().map(|l| l.uri).ok_or(ApiError { status: 404, message: "Nexus Mods didn't offer a download server for this file.".into() })
+    }
+}
+
+/// One version's notes in a mod's changelog.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Change {
+    pub version: String,
+    pub notes: Vec<String>,
+}
+
+/// Version numbers compared part by part ("1.10" after "1.9"); text parts as text.
+pub fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let parts = |s: &str| s.trim_start_matches(['v', 'V']).split(['.', '-', ' ']).map(|p| p.parse::<u64>().map_err(|_| p.to_lowercase())).collect::<Vec<_>>();
+    let (pa, pb) = (parts(a), parts(b));
+    for (x, y) in pa.iter().zip(pb.iter()) {
+        let o = match (x, y) {
+            (Ok(x), Ok(y)) => x.cmp(y),
+            (Ok(_), Err(_)) => std::cmp::Ordering::Greater,
+            (Err(_), Ok(_)) => std::cmp::Ordering::Less,
+            (Err(x), Err(y)) => x.cmp(y),
+        };
+        if o != std::cmp::Ordering::Equal {
+            return o;
+        }
+    }
+    pa.len().cmp(&pb.len())
+}
+
+/// Nexus Mods answers {"1.2": ["Fixed x", ...], ...} (or [] when there's none).
+pub fn changes_from(v: &serde_json::Value) -> Vec<Change> {
+    let mut out: Vec<Change> = v
+        .as_object()
+        .map(|o| {
+            o.iter()
+                .map(|(k, lines)| Change {
+                    version: k.clone(),
+                    notes: lines.as_array().map(|a| a.iter().filter_map(|l| l.as_str()).map(|l| l.trim().chars().take(600).collect::<String>()).filter(|l| !l.is_empty()).take(60).collect()).unwrap_or_default(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_by(|a, b| version_cmp(&b.version, &a.version));
+    out.truncate(40);
+    out
+}
+
+#[cfg(test)]
+mod changelog_tests {
+    use super::*;
+
+    #[test]
+    fn sorts_versions_newest_first() {
+        let v = serde_json::json!({ "1.9": ["a"], "1.10": ["b", " "], "v2.0": ["c"], "1.2": [] });
+        let c = changes_from(&v);
+        assert_eq!(c.iter().map(|x| x.version.as_str()).collect::<Vec<_>>(), vec!["v2.0", "1.10", "1.9", "1.2"]);
+        assert_eq!(c[1].notes, vec!["b"]);
+        assert!(changes_from(&serde_json::json!([])).is_empty());
     }
 }

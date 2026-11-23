@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-addon-set"
+description = "Enables the profile_addon_set command without any pre-configured scope."
+commands.allow = ["profile_addon_set"]
+
+[[permission]]
+identifier = "deny-profile-addon-set"
+description = "Denies the profile_addon_set command without any pre-configured scope."
+commands.deny = ["profile_addon_set"]

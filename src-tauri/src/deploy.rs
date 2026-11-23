@@ -10,13 +10,13 @@
 //! - Bethesda games: the profile's plugins (.esp, .esm, .esl) are switched on in the Proton
 //!   prefix's plugins.txt, and switched off again when the mods are taken out.
 //!
-//! Mods with an installer (a `fomod` folder) are put in without their installer's choices; the
-//! result says which ones need a look.
+//! Mods with an installer (a `fomod` folder) use the folder built from their installer's choices
+//! (`fomod`); until those are made they're put in as they are, and the result says which ones.
 
 use crate::library::{self, StoredMod};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
     path::{Component, Path, PathBuf},
 };
@@ -52,6 +52,35 @@ pub struct Profile {
     /// Finished downloads for this game go into this profile by themselves (one per game).
     #[serde(default)]
     pub new_downloads: bool,
+    /// Keeps its own saves (see `saves`); otherwise it shares the usual ones.
+    #[serde(default)]
+    pub own_saves: bool,
+    /// The collection as it was at its revision, kept apart from your changes (see `layers`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<crate::layers::Base>,
+    /// Named sets of changes on top of the collection, each switched on or off.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addons: Vec<crate::layers::Addon>,
+    /// "Load this after that" rules, kept whenever the order changes (see `order`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<crate::order::Rule>,
+    /// Your notes on the profile (what it's for, what to remember).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Made from a Thunderstore mod pack: "Owner-Name" and the version, for its updates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ts_pack: Option<(String, String)>,
+}
+
+/// Games whose mods go in through their own tool, not by putting files in a folder: what to
+/// tell the person instead of asking for a mod folder.
+pub fn mod_tool(game: &str) -> Option<&'static str> {
+    Some(match game {
+        "masseffectlegendaryedition" => "Mass Effect Legendary Edition mods are installed with ME3Tweaks Mod Manager, not by copying files.",
+        "terraria" => "Terraria mods are installed through tModLoader (a free Steam app), in its own Mods folder.",
+        "baldursgate3" => "Baldur's Gate 3 mods also need its in-game mod list or BG3 Mod Manager; Zom's Nexus puts the files in place.",
+        _ => return None,
+    })
 }
 
 /// Where a game's mods go, under its install folder. None: not known, so ask the person.
@@ -60,6 +89,10 @@ pub fn default_mod_folder(game: &str) -> Option<&'static str> {
         "skyrimspecialedition" | "skyrim" | "fallout4" | "newvegas" | "fallout3" | "oblivion" | "starfield" => "Data",
         "morrowind" => "Data Files",
         "stardewvalley" => "Mods",
+        // Unreal games load extra .pak files from a ~mods folder.
+        "finalfantasy7rebirth" => "End/Content/Paks/~mods",
+        "clairobscurexpedition33" => "Sandfall/Content/Paks/~mods",
+        "helldivers2" => "data",
         "cyberpunk2077" | "witcher3" | "valheim" | "eldenring" | "mountandblade2bannerlord" | "kingdomcomedeliverance" | "kingdomcomedeliverance2" | "nomanssky" | "subnautica" | "palworld" | "hogwartslegacy" | "monsterhunterworld" | "monsterhunterwilds" | "darksouls3" | "sekiro" | "bladeandsorcery" | "rimworld" | "xcom2" | "citiesskylines" | "stalker2heartofchornobyl" => "",
         _ => return None,
     })
@@ -93,6 +126,9 @@ pub struct Deployed {
     /// Plugins switched on in plugins.txt.
     pub plugins: Vec<String>,
     pub plugins_file: Option<String>,
+    /// Settings files placed, with (size, modified) then, to tell which you changed.
+    #[serde(default)]
+    pub settings: std::collections::BTreeMap<String, (u64, u64)>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -169,6 +205,10 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 /// The folder whose contents go into the mod folder: skip a single wrapping folder
 /// ("SkyUI_5_2/..."), and say whether the mod brings the mod folder itself ("Data/...").
 fn content_root(unpacked: &Path, mod_folder: &str) -> (PathBuf, bool) {
+    // A folder built from installer choices is already laid out like the mod folder.
+    if unpacked.join(crate::fomod::MARK).is_file() {
+        return (unpacked.to_path_buf(), false);
+    }
     let target = Path::new(mod_folder).file_name().map(|n| n.to_string_lossy().to_lowercase());
     let mut src = unpacked.to_path_buf();
     for _ in 0..3 {
@@ -177,8 +217,11 @@ fn content_root(unpacked: &Path, mod_folder: &str) -> (PathBuf, bool) {
         if has_target {
             return (src, true);
         }
-        match entries.as_slice() {
-            [only] if only.path().is_dir() && !matches!(only.file_name().to_string_lossy().to_lowercase().as_str(), "fomod" | "meshes" | "textures" | "scripts" | "interface" | "sound" | "seq" | "skse" | "archive" | "bin" | "r6" | "red4ext" | "bepinex" | "content") => {
+        // One folder, maybe with a readme or pictures beside it: the mod is in the folder.
+        let dirs: Vec<_> = entries.iter().filter(|e| e.path().is_dir()).collect();
+        let loose_docs = entries.iter().filter(|e| !e.path().is_dir()).all(|e| crate::check::is_doc(&e.file_name().to_string_lossy()));
+        match dirs.as_slice() {
+            [only] if loose_docs && !matches!(only.file_name().to_string_lossy().to_lowercase().as_str(), "fomod" | "meshes" | "textures" | "scripts" | "interface" | "sound" | "seq" | "skse" | "archive" | "bin" | "r6" | "red4ext" | "bepinex" | "content" | "mods" | "plugins" | "data" | "engine" | "reframework" | "ue4ss" | "melonloader" | "userlibs" | "paks" | "binaries") => {
                 src = only.path();
             }
             _ => break,
@@ -190,6 +233,12 @@ fn content_root(unpacked: &Path, mod_folder: &str) -> (PathBuf, bool) {
 /// A library file's unpacked folder, unpacking it first if it hasn't been.
 pub fn unpacked_dir(m: &StoredMod, f: &library::StoredFile) -> Result<PathBuf, String> {
     let dir = PathBuf::from(&m.folder);
+    if let Some(i) = &f.installed {
+        let built = dir.join(library::safe_name(&i.folder));
+        if built.is_dir() {
+            return Ok(built);
+        }
+    }
     match &f.unpacked {
         Some(u) => Ok(dir.join(library::safe_name(u))),
         None => {
@@ -204,26 +253,169 @@ pub fn unpacked_dir(m: &StoredMod, f: &library::StoredFile) -> Result<PathBuf, S
 /// Where each of a mod's files goes, relative to the game folder ("Data/textures/sky.dds"),
 /// and where it comes from. A mod's installer folder (fomod) isn't put in.
 pub fn entries(unpacked: &Path, mod_folder: &str) -> Vec<(String, PathBuf)> {
+    // A built folder for the game's own folder (a mod loader like SMAPI).
+    if unpacked.join(crate::fomod::MARK).is_file() && unpacked.join(GAME_ROOT_MARK).is_file() {
+        return walk(unpacked)
+            .into_iter()
+            .filter(|rel| rel.as_os_str() != crate::fomod::MARK && rel.as_os_str() != GAME_ROOT_MARK)
+            .map(|rel| (rel.to_string_lossy().replace('\\', "/"), unpacked.join(rel)))
+            .collect();
+    }
+    // SMAPI mods (Stardew Valley): each folder with a manifest is one mod and keeps its folder.
+    if !unpacked.join(crate::fomod::MARK).is_file() {
+        let dirs = smapi_mod_dirs(unpacked);
+        if !dirs.is_empty() {
+            let mut out = vec![];
+            for d in dirs {
+                let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "mod".into());
+                for rel in walk(&d) {
+                    out.push((Path::new(mod_folder).join(&name).join(&rel).to_string_lossy().replace('\\', "/"), d.join(rel)));
+                }
+            }
+            return out;
+        }
+    }
     let (src, brings_folder) = content_root(unpacked, mod_folder);
     // "Data/..." in the mod goes to <game>/Data/...; anything else goes into the mod folder.
     let base = if brings_folder { Path::new(mod_folder).parent().map(Path::to_path_buf).unwrap_or_default() } else { PathBuf::from(mod_folder) };
     walk(&src)
         .into_iter()
-        .filter(|rel| !rel.components().next().map(|c| c.as_os_str().eq_ignore_ascii_case("fomod")).unwrap_or(false))
+        .filter(|rel| !rel.components().next().map(|c| c.as_os_str().eq_ignore_ascii_case("fomod")).unwrap_or(false) && rel.as_os_str() != crate::fomod::MARK)
         .map(|rel| (base.join(&rel).to_string_lossy().replace('\\', "/"), src.join(rel)))
         .collect()
 }
 
-/// Take out whatever mods are in the game now, putting its own files back.
-pub fn clear(data: &Path, game: &str, root: &Path) -> Result<(), String> {
-    let d = deployed(data, game);
-    for rel in &d.files {
-        if let Some(p) = inside(root, rel) {
-            let _ = fs::remove_file(p);
+/// Marks a built folder whose files go into the game's own folder, not its mod folder.
+pub const GAME_ROOT_MARK: &str = ".zoms-nexus-game-folder";
+
+/// Folders holding a SMAPI mod (a manifest.json with a UniqueID), the top-most ones, up to four
+/// folders down. Empty for anything else.
+pub fn smapi_mod_dirs(unpacked: &Path) -> Vec<PathBuf> {
+    let mut out = vec![];
+    let mut stack = vec![(unpacked.to_path_buf(), 0)];
+    while let Some((d, depth)) = stack.pop() {
+        let Ok(rd) = fs::read_dir(&d) else { continue };
+        let entries: Vec<_> = rd.flatten().collect();
+        let manifest = entries.iter().find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case("manifest.json") && e.path().is_file());
+        if manifest.is_some_and(|m| fs::read_to_string(m.path()).map(|t| t.to_lowercase().contains("\"uniqueid\"")).unwrap_or(false)) {
+            out.push(d);
+            continue;
+        }
+        if depth < 4 {
+            for e in entries.iter().filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.')) {
+                stack.push((e.path(), depth + 1));
+            }
         }
     }
+    out.sort();
+    out
+}
+
+/// SMAPI's installer (Nexus Mods' SMAPI download): build a folder from its `install.dat` for the
+/// build installed (Windows under Proton, or Linux), to go into the game's own folder. None when
+/// `unpacked` isn't SMAPI's installer.
+pub fn smapi_build(unpacked: &Path, mod_dir: &Path, base_name: &str, windows: bool) -> Option<Result<crate::fomod::Installed, String>> {
+    let os = if windows { "windows" } else { "linux" };
+    let dat = walk(unpacked).into_iter().find(|p| p.to_string_lossy().to_lowercase().ends_with(&format!("internal/{os}/install.dat")))?;
+    let build = || -> Result<crate::fomod::Installed, String> {
+        let folder = library::safe_name(&format!("{base_name} (installed)"));
+        let (dest, tmp) = (mod_dir.join(&folder), mod_dir.join(format!(".{folder}.building")));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+        // install.dat is a zip; unpack it as one (paths that leave the folder are refused).
+        let zip = tmp.join("install.zip");
+        fs::copy(unpacked.join(&dat), &zip).map_err(|e| e.to_string())?;
+        let res = library::unpack(&zip).and_then(|name| {
+            for e in fs::read_dir(tmp.join(&name)).map_err(|e| e.to_string())?.flatten() {
+                fs::rename(e.path(), tmp.join(e.file_name())).map_err(|e| e.to_string())?;
+            }
+            let _ = fs::remove_dir(tmp.join(&name));
+            let _ = fs::remove_file(&zip);
+            // Windows build: SMAPI's launcher also stands in for the game's, so Steam starts SMAPI
+            // with no launch options. It's a .NET launcher that runs StardewModdingAPI.dll whatever
+            // it's called; the game's own launcher is kept aside and put back with the mods.
+            if windows {
+                let launcher = tmp.join("StardewModdingAPI.exe");
+                if launcher.is_file() {
+                    fs::copy(&launcher, tmp.join("Stardew Valley.exe")).map_err(|e| e.to_string())?;
+                }
+            }
+            fs::write(tmp.join(crate::fomod::MARK), b"SMAPI, unpacked from its installer by Zom's Nexus.\n").map_err(|e| e.to_string())?;
+            fs::write(tmp.join(GAME_ROOT_MARK), b"These files go into the game's own folder.\n").map_err(|e| e.to_string())
+        });
+        if let Err(e) = res {
+            let _ = fs::remove_dir_all(&tmp);
+            return Err(e);
+        }
+        let _ = fs::remove_dir_all(&dest);
+        fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+        Ok(crate::fomod::Installed { folder, choices: vec![] })
+    };
+    Some(build())
+}
+
+/// Take out whatever mods are in the game now, putting its own files back.
+pub fn clear(data: &Path, game: &str, root: &Path) -> Result<(), String> {
+    clear_keeping(data, game, root, &HashMap::new()).map(|_| ())
+}
+
+/// `rel` spelled the way the game folder already has it, part by part, ignoring capitals
+/// ("data/Textures/a.dds" → "Data/textures/a.dds" when those are there).
+pub fn same_case(root: &Path, rel: &str) -> String {
+    let mut at = root.to_path_buf();
+    let mut out: Vec<String> = vec![];
+    let mut exists = true;
+    for part in rel.split('/').filter(|p| !p.is_empty()) {
+        let mut name = part.to_string();
+        if exists {
+            if at.join(part).exists() {
+                // Spelled the same already.
+            } else if let Some(e) = fs::read_dir(&at).ok().and_then(|rd| rd.flatten().find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(part))) {
+                name = e.file_name().to_string_lossy().into_owned();
+            } else {
+                exists = false;
+            }
+        }
+        at.push(&name);
+        out.push(name);
+    }
+    out.join("/")
+}
+
+/// The game file is already the mod's file: the same file (a link), or a copy of it no older.
+fn same_file(game: &Path, from: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (fs::symlink_metadata(game), fs::metadata(from)) {
+        (Ok(g), Ok(f)) if g.is_file() => (g.dev() == f.dev() && g.ino() == f.ino()) || (g.len() == f.len() && g.mtime() >= f.mtime()),
+        _ => false,
+    }
+}
+
+/// Take the mods out, except files in `keep` (lowercase path → the file that should be there)
+/// that are already right. Settings you changed are kept with the profile first.
+fn clear_keeping(data: &Path, game: &str, root: &Path, keep: &HashMap<String, PathBuf>) -> Result<Deployed, String> {
+    let d = deployed(data, game);
+    crate::modsettings::capture(data, &d, root);
+    let mut left = Deployed::default();
+    for rel in &d.files {
+        let Some(p) = inside(root, rel) else { continue };
+        if !d.settings.contains_key(rel) {
+            if let Some(from) = keep.get(&rel.to_lowercase()) {
+                if same_file(&p, from) {
+                    left.files.push(rel.clone());
+                    continue;
+                }
+            }
+        }
+        let _ = fs::remove_file(p);
+    }
+    let still: HashSet<String> = left.files.iter().map(|f| f.to_lowercase()).collect();
     let backup = root.join(BACKUP);
     for rel in &d.backups {
+        if still.contains(&rel.to_lowercase()) {
+            left.backups.push(rel.clone());
+            continue;
+        }
         if let (Some(from), Some(to)) = (inside(&backup, rel), inside(root, rel)) {
             if let Some(parent) = to.parent() {
                 let _ = fs::create_dir_all(parent);
@@ -235,14 +427,18 @@ pub fn clear(data: &Path, game: &str, root: &Path) -> Result<(), String> {
     dirs.sort_by_key(|d| std::cmp::Reverse(d.matches('/').count()));
     for rel in dirs {
         if let Some(p) = inside(root, rel) {
-            let _ = fs::remove_dir(p); // Only when empty.
+            let _ = fs::remove_dir(&p); // Only when empty.
+            if p.is_dir() && !still.is_empty() {
+                left.dirs.push(rel.clone());
+            }
         }
     }
     prune_empty(&backup);
     if let (Some(file), false) = (&d.plugins_file, d.plugins.is_empty()) {
         let _ = set_plugins(Path::new(file), &d.plugins, &[], false);
     }
-    save_manifest(data, game, &Deployed::default())
+    save_manifest(data, game, &left)?;
+    Ok(left)
 }
 
 /// Put plugins.txt's lines for `old` out and `new` in, keeping every other line as it was.
@@ -272,11 +468,13 @@ pub struct Target<'a> {
     pub root: &'a Path,
     pub mod_folder: &'a str,
     pub prefix: Option<&'a Path>,
+    /// Copy every file instead of hard-linking it.
+    pub copy: bool,
 }
 
 /// Apply a profile: take out what's there, then put this profile's mods in.
 /// Whether two folders are on the same drive (so files can be hard-linked between them).
-fn same_drive(a: &Path, b: &Path) -> bool {
+pub fn same_drive(a: &Path, b: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     match (fs::metadata(a), fs::metadata(b)) {
         (Ok(x), Ok(y)) => x.dev() == y.dev(),
@@ -305,61 +503,109 @@ pub fn apply(data: &Path, t: &Target, profile: &Profile, mods: &[StoredMod]) -> 
         ready.push((m, unpacked_dir(m, f)?));
     }
     if let Some((_, first)) = ready.first() {
-        if !same_drive(first, t.root) {
-            let need: u64 = ready.iter().flat_map(|(_, u)| entries(u, t.mod_folder)).map(|(_, from)| fs::metadata(from).map(|m| m.len()).unwrap_or(0)).sum();
+        if t.copy || !same_drive(first, t.root) {
+            // Only what isn't in the game already: files already right stay where they are.
+            let need: u64 = ready
+                .iter()
+                .flat_map(|(_, u)| entries(u, t.mod_folder))
+                .filter(|(rel, from)| !same_file(&t.root.join(same_case(t.root, rel)), from))
+                .map(|(_, from)| fs::metadata(from).map(|m| m.len()).unwrap_or(0))
+                .sum();
             library::ensure_space(t.root, need, "copying the mods into the game (the library is on another drive)")?;
         }
     }
-    clear(data, t.game, t.root)?;
-    let mut d = Deployed { profile_id: Some(profile.id.clone()), profile_name: Some(profile.name.clone()), ..Default::default() };
-    let mut placed: HashMap<String, usize> = HashMap::new(); // lowercased path -> index in d.files
-    let mut made_dirs: BTreeSet<String> = BTreeSet::new();
-    let backup = t.root.join(BACKUP);
-
+    // What goes where: a later mod wins a file more than one has.
+    let mut want: Vec<(String, PathBuf)> = vec![];
+    let mut at: HashMap<String, usize> = HashMap::new();
     for (m, unpacked) in &ready {
         let unpacked = unpacked.as_path();
-        if unpacked.join("fomod").is_dir() || walk(&unpacked).iter().any(|p| p.components().next().map(|c| c.as_os_str().eq_ignore_ascii_case("fomod")).unwrap_or(false)) {
+        if unpacked.join("fomod").is_dir() || walk(unpacked).iter().any(|p| p.components().next().map(|c| c.as_os_str().eq_ignore_ascii_case("fomod")).unwrap_or(false)) {
             out.installers.push(m.name.clone());
         }
         out.mods += 1;
-        for (rel_s, from) in entries(&unpacked, t.mod_folder) {
-            let rel_game = PathBuf::from(&rel_s);
-            let Some(to) = inside(t.root, &rel_s) else { continue };
+        for (rel_s, from) in entries(unpacked, t.mod_folder) {
             let key = rel_s.to_lowercase();
-            if placed.contains_key(&key) {
-                out.clashes += 1;
-                let _ = fs::remove_file(&to);
-            } else if to.exists() || to.is_symlink() {
-                // The game's own file: keep it safe.
-                let b = backup.join(&rel_game);
-                fs::create_dir_all(b.parent().unwrap()).map_err(|e| e.to_string())?;
-                fs::rename(&to, &b).map_err(|e| format!("Couldn't move the game's {rel_s} aside: {e}"))?;
-                d.backups.push(rel_s.clone());
-                out.backed_up += 1;
-            }
-            // Note each folder made, from the top down.
-            let mut acc = PathBuf::new();
-            for c in rel_game.parent().map(|p| p.components().collect::<Vec<_>>()).unwrap_or_default() {
-                acc.push(c);
-                if !t.root.join(&acc).exists() {
-                    made_dirs.insert(acc.to_string_lossy().replace('\\', "/"));
+            match at.get(&key) {
+                Some(&j) => {
+                    out.clashes += 1;
+                    want[j] = (rel_s, from);
+                }
+                None => {
+                    at.insert(key, want.len());
+                    want.push((rel_s, from));
                 }
             }
-            if let Some(parent) = to.parent() {
-                fs::create_dir_all(parent).map_err(|e| format!("Couldn't make {}: {e}", parent.display()))?;
+        }
+    }
+    // Files already right stay; only what changed comes out and goes in.
+    let keep: HashMap<String, PathBuf> = want.iter().map(|(r, f)| (r.to_lowercase(), f.clone())).collect();
+    let left = clear_keeping(data, t.game, t.root, &keep)?;
+    let mut d = Deployed { profile_id: Some(profile.id.clone()), profile_name: Some(profile.name.clone()), files: left.files, backups: left.backups, ..Default::default() };
+    let mut placed: HashSet<String> = d.files.iter().map(|f| f.to_lowercase()).collect();
+    let mut made_dirs: BTreeSet<String> = left.dirs.into_iter().collect();
+    let backup = t.root.join(BACKUP);
+    out.backed_up = d.backups.len();
+    let put = |rel_s: &str, from: &Path, d: &mut Deployed, made_dirs: &mut BTreeSet<String>, placed: &mut HashSet<String>, out: &mut Applied| -> Result<(), String> {
+        // Windows doesn't mind "Textures" and "textures"; Linux does. Use the spelling already there.
+        let rel_owned = same_case(t.root, rel_s);
+        let rel_s = rel_owned.as_str();
+        let rel_game = PathBuf::from(rel_s);
+        let Some(to) = inside(t.root, rel_s) else { return Ok(()) };
+        let key = rel_s.to_lowercase();
+        if placed.contains(&key) {
+            let _ = fs::remove_file(&to);
+        } else if to.exists() || to.is_symlink() {
+            // The game's own file: keep it safe.
+            let b = backup.join(&rel_game);
+            fs::create_dir_all(b.parent().unwrap()).map_err(|e| e.to_string())?;
+            fs::rename(&to, &b).map_err(|e| format!("Couldn't move the game's {rel_s} aside: {e}"))?;
+            d.backups.push(rel_s.to_string());
+            out.backed_up += 1;
+        }
+        // Note each folder made, from the top down.
+        let mut acc = PathBuf::new();
+        for c in rel_game.parent().map(|p| p.components().collect::<Vec<_>>()).unwrap_or_default() {
+            acc.push(c);
+            if !t.root.join(&acc).exists() {
+                made_dirs.insert(acc.to_string_lossy().replace('\\', "/"));
             }
-            if fs::hard_link(&from, &to).is_err() {
-                fs::copy(&from, &to).map_err(|e| format!("Couldn't put {rel_s} in the game folder: {e}"))?;
-            }
-            if !placed.contains_key(&key) {
-                placed.insert(key, d.files.len());
-                d.files.push(rel_s);
-            }
-            // Save as we go, so a failure halfway can still be undone.
-            if d.files.len() % 500 == 0 {
-                d.dirs = made_dirs.iter().cloned().collect();
-                save_manifest(data, t.game, &d)?;
-            }
+        }
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("Couldn't make {}: {e}", parent.display()))?;
+        }
+        // Settings are copies, so a mod saving its settings never changes the library's file.
+        if t.copy || crate::modsettings::is_setting(rel_s) || fs::hard_link(from, &to).is_err() {
+            fs::copy(from, &to).map_err(|e| format!("Couldn't put {rel_s} in the game folder: {e}"))?;
+        }
+        if placed.insert(key) {
+            d.files.push(rel_s.to_string());
+        }
+        Ok(())
+    };
+    for (rel_s, from) in &want {
+        if placed.contains(&rel_s.to_lowercase()) {
+            continue; // Already right.
+        }
+        put(rel_s, from, &mut d, &mut made_dirs, &mut placed, &mut out)?;
+        // Save as we go, so a failure halfway can still be undone.
+        if d.files.len().is_multiple_of(500) {
+            d.dirs = made_dirs.iter().cloned().collect();
+            save_manifest(data, t.game, &d)?;
+        }
+    }
+    // This profile's own settings, over the mods' defaults: where a mod put that file, or in a
+    // folder made for the mods (never over a game file).
+    for (rel, file) in crate::modsettings::kept(data, &profile.id) {
+        let low = rel.to_lowercase();
+        let ours = placed.contains(&low) || made_dirs.iter().any(|m| low.starts_with(&format!("{}/", m.to_lowercase())));
+        let game_file = inside(t.root, &rel).is_some_and(|p| p.exists()) && !placed.contains(&low);
+        if ours && !game_file {
+            put(&rel, &file, &mut d, &mut made_dirs, &mut placed, &mut out)?;
+        }
+    }
+    for f in d.files.iter().filter(|f| crate::modsettings::is_setting(f)) {
+        if let Some(s) = inside(t.root, f).and_then(|p| crate::modsettings::stamp(&p)) {
+            d.settings.insert(f.clone(), s);
         }
     }
     d.dirs = made_dirs.into_iter().collect();
@@ -411,13 +657,15 @@ mod tests {
             summary: None,
             picture_url: None,
             local: false,
+            adult: false,
+            source: None,
             folder: folder.to_string_lossy().into_owned(),
-            files: vec![StoredFile { file_id: id * 10, name: "Main".into(), file_name: "m.7z".into(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: Some("unpacked".into()), uploaded: None, verified: None }],
+            files: vec![StoredFile { file_id: id * 10, name: "Main".into(), file_name: "m.7z".into(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: Some("unpacked".into()), uploaded: None, verified: None, installed: None, has_installer: false }],
         }
     }
 
     fn profile(ids: &[u64]) -> Profile {
-        Profile { id: "p1".into(), name: "Winter".into(), game: "skyrimspecialedition".into(), mods: ids.iter().map(|i| ProfileMod { mod_id: *i, file_id: i * 10, enabled: true }).collect(), collection: None, manual_requirements: false, new_downloads: false }
+        Profile { id: "p1".into(), name: "Winter".into(), game: "skyrimspecialedition".into(), mods: ids.iter().map(|i| ProfileMod { mod_id: *i, file_id: i * 10, enabled: true }).collect(), collection: None, manual_requirements: false, new_downloads: false, own_saves: false, base: None, addons: vec![], rules: vec![], note: None, ts_pack: None }
     }
 
     #[test]
@@ -434,7 +682,7 @@ mod tests {
         // Mod 1 wraps its files in a folder and brings Data/; mod 2 has loose files and wins the clash.
         let m1 = lib_mod(&lib, 1, &[("Wrapper/Data/textures/sky.dds", "mod1"), ("Wrapper/Data/Lanterns.esp", "p")]);
         let m2 = lib_mod(&lib, 2, &[("textures/sky.dds", "mod2"), ("meshes/new.nif", "n"), ("fomod/ModuleConfig.xml", "x")]);
-        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: Some(&pfx) };
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: Some(&pfx), copy: false };
         let r = apply(&data, &t, &profile(&[1, 2, 3]), &[m1, m2]).unwrap();
         assert_eq!(fs::read_to_string(game.join("Data/textures/sky.dds")).unwrap(), "mod2");
         assert_eq!(fs::read_to_string(game.join(BACKUP).join("Data/textures/sky.dds")).unwrap(), "original");
@@ -463,7 +711,7 @@ mod tests {
         fs::create_dir_all(&game).unwrap();
         let m1 = lib_mod(&lib, 1, &[("a.txt", "1")]);
         let m2 = lib_mod(&lib, 2, &[("b.txt", "2")]);
-        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: None };
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: None, copy: false };
         apply(&data, &t, &profile(&[1]), &[m1.clone(), m2.clone()]).unwrap();
         assert!(game.join("Data/a.txt").exists());
         apply(&data, &t, &profile(&[2]), &[m1, m2]).unwrap();
@@ -473,9 +721,106 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_files_stay_and_each_profile_keeps_its_settings() {
+        use std::os::unix::fs::MetadataExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let (data, lib, game) = (tmp.path().join("data"), tmp.path().join("lib"), tmp.path().join("game"));
+        fs::create_dir_all(&game).unwrap();
+        let m1 = lib_mod(&lib, 1, &[("SKSE/a.dll", "code"), ("SKSE/cool.ini", "volume=5")]);
+        let m2 = lib_mod(&lib, 2, &[("b.txt", "2")]);
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: None, copy: false };
+        let p1 = profile(&[1]);
+        let mut p2 = profile(&[1, 2]);
+        p2.id = "p2".into();
+        let all = [m1.clone(), m2.clone()];
+        apply(&data, &t, &p1, &all).unwrap();
+        let ino = fs::metadata(game.join("Data/SKSE/a.dll")).unwrap().ino();
+        // Settings are copies: the library's file never changes.
+        let ini = game.join("Data/SKSE/cool.ini");
+        assert_ne!(fs::metadata(&ini).unwrap().ino(), fs::metadata(lib.join("skyrimspecialedition/1 - Mod 1/unpacked/SKSE/cool.ini")).unwrap().ino());
+        // While playing: you change a setting, and the mod makes a new settings file.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(&ini, "volume=9").unwrap();
+        fs::write(game.join("Data/SKSE/made.json"), "{}").unwrap();
+        // Another profile: the same mod's files stay where they are; p1's settings wait.
+        apply(&data, &t, &p2, &all).unwrap();
+        assert_eq!(fs::metadata(game.join("Data/SKSE/a.dll")).unwrap().ino(), ino, "unchanged file left alone");
+        assert_eq!(fs::read_to_string(&ini).unwrap(), "volume=5");
+        assert!(!game.join("Data/SKSE/made.json").exists());
+        assert_eq!(fs::read_to_string(lib.join("skyrimspecialedition/1 - Mod 1/unpacked/SKSE/cool.ini")).unwrap(), "volume=5");
+        // Back to p1: its settings come back.
+        apply(&data, &t, &p1, &all).unwrap();
+        assert_eq!(fs::read_to_string(&ini).unwrap(), "volume=9");
+        assert!(game.join("Data/SKSE/made.json").exists());
+        assert!(!game.join("Data/b.txt").exists());
+        // Taking the mods out keeps them with p1 and leaves nothing behind.
+        clear(&data, "skyrimspecialedition", &game).unwrap();
+        assert!(!game.join("Data").exists());
+        assert_eq!(crate::modsettings::kept(&data, "p1").len(), 2);
+    }
+
+    #[test]
+    fn mods_use_the_spelling_already_in_the_game() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (data, lib, game) = (tmp.path().join("data"), tmp.path().join("lib"), tmp.path().join("game"));
+        fs::create_dir_all(game.join("Data/textures")).unwrap();
+        fs::write(game.join("Data/textures/Rock.dds"), "game").unwrap();
+        let m1 = lib_mod(&lib, 1, &[("Textures/rock.dds", "mod"), ("Textures/new.dds", "n")]);
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: None, copy: false };
+        apply(&data, &t, &profile(&[1]), &[m1]).unwrap();
+        assert!(!game.join("Data/Textures").exists(), "no second folder");
+        assert_eq!(fs::read_to_string(game.join("Data/textures/Rock.dds")).unwrap(), "mod");
+        assert!(game.join("Data/textures/new.dds").is_file());
+        clear(&data, "skyrimspecialedition", &game).unwrap();
+        assert_eq!(fs::read_to_string(game.join("Data/textures/Rock.dds")).unwrap(), "game", "the game's own file is back");
+        assert!(!game.join("Data/textures/new.dds").exists());
+    }
+
+    #[test]
     fn manifest_paths_cannot_leave_the_game_folder() {
         assert!(inside(Path::new("/g"), "../etc/passwd").is_none());
         assert!(inside(Path::new("/g"), "/etc/passwd").is_none());
         assert!(inside(Path::new("/g"), "Data/a.esp").is_some());
+    }
+
+    #[test]
+    fn smapi_mods_keep_their_folders_and_smapi_goes_to_the_game_folder() {
+        use std::io::Write;
+        let d = tempfile::tempdir().unwrap();
+        // One mod in a wrapping folder, and a pack of two.
+        let one = d.path().join("one");
+        fs::create_dir_all(one.join("Automate")).unwrap();
+        fs::write(one.join("Automate/manifest.json"), r#"{"Name":"Automate","UniqueID":"Pathoschild.Automate"}"#).unwrap();
+        fs::write(one.join("Automate/Automate.dll"), "x").unwrap();
+        let e: Vec<String> = entries(&one, "Mods").into_iter().map(|(r, _)| r).collect();
+        assert_eq!(e, vec!["Mods/Automate/Automate.dll", "Mods/Automate/manifest.json"]);
+        let pack = d.path().join("pack/Ridgeside");
+        for m in ["[CP] RSV", "[CC] RSV"] {
+            fs::create_dir_all(pack.join(m)).unwrap();
+            fs::write(pack.join(m).join("manifest.json"), r#"{"UniqueID":"x"}"#).unwrap();
+        }
+        let e: Vec<String> = entries(&d.path().join("pack"), "Mods").into_iter().map(|(r, _)| r).collect();
+        assert_eq!(e, vec!["Mods/[CC] RSV/manifest.json", "Mods/[CP] RSV/manifest.json"]);
+
+        // SMAPI's installer: install.dat (a zip) for Windows becomes a folder for the game's own folder.
+        let smapi = d.path().join("SMAPI 4/SMAPI 4 installer/internal/windows");
+        fs::create_dir_all(&smapi).unwrap();
+        {
+            let mut w = zip::ZipWriter::new(fs::File::create(smapi.join("install.dat")).unwrap());
+            for (n, c) in [("StardewModdingAPI.exe", "smapi"), ("smapi-internal/a.dll", "a"), ("Mods/ConsoleCommands/manifest.json", r#"{"UniqueID":"c"}"#)] {
+                w.start_file(n, zip::write::SimpleFileOptions::default()).unwrap();
+                w.write_all(c.as_bytes()).unwrap();
+            }
+            w.finish().unwrap();
+        }
+        let modd = d.path().join("lib/2400 - SMAPI");
+        fs::create_dir_all(&modd).unwrap();
+        let built = smapi_build(&d.path().join("SMAPI 4"), &modd, "SMAPI 4", true).unwrap().unwrap();
+        let folder = modd.join(&built.folder);
+        assert_eq!(fs::read_to_string(folder.join("Stardew Valley.exe")).unwrap(), "smapi", "stands in for the game's launcher");
+        let e: Vec<String> = entries(&folder, "Mods").into_iter().map(|(r, _)| r).collect();
+        assert!(e.contains(&"StardewModdingAPI.exe".to_string()) && e.contains(&"Mods/ConsoleCommands/manifest.json".to_string()) && e.contains(&"smapi-internal/a.dll".to_string()));
+        assert!(!e.iter().any(|x| x.contains(".zoms-nexus")));
+        assert!(smapi_build(&one, &modd, "x", true).is_none(), "not SMAPI");
     }
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-saves-move-copies"
+description = "Enables the saves_move_copies command without any pre-configured scope."
+commands.allow = ["saves_move_copies"]
+
+[[permission]]
+identifier = "deny-saves-move-copies"
+description = "Denies the saves_move_copies command without any pre-configured scope."
+commands.deny = ["saves_move_copies"]

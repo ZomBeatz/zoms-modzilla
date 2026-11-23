@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-addon-save"
+description = "Enables the profile_addon_save command without any pre-configured scope."
+commands.allow = ["profile_addon_save"]
+
+[[permission]]
+identifier = "deny-profile-addon-save"
+description = "Denies the profile_addon_save command without any pre-configured scope."
+commands.deny = ["profile_addon_save"]

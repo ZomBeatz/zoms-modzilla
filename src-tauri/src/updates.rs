@@ -82,7 +82,7 @@ pub async fn check(nexus: &Nexus, mods: Vec<StoredMod>) -> Report {
             Err(e) => problems.push((m.name.clone(), e.message)),
         }
     }
-    updates.sort_by(|a, b| a.mod_name.to_lowercase().cmp(&b.mod_name.to_lowercase()));
+    updates.sort_by_key(|a| a.mod_name.to_lowercase());
     Report { updates, checked, problems, at: crate::queue::now() }
 }
 
@@ -104,11 +104,11 @@ mod tests {
             version: None,
             summary: None,
             picture_url: None,
-            local: false,
+            local: false, adult: false, source: None,
             folder: String::new(),
             files: ids
                 .iter()
-                .map(|i| StoredFile { file_id: *i, name: String::new(), file_name: String::new(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: None, uploaded: None, verified: None })
+                .map(|i| StoredFile { file_id: *i, name: String::new(), file_name: String::new(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: None, uploaded: None, verified: None, installed: None, has_installer: false })
                 .collect(),
         }
     }

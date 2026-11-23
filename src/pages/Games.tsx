@@ -1,29 +1,48 @@
+import { GoneList } from "./GoneGames";
 import { useEffect, useState } from "react";
-import { Compass, FolderOpen, Gamepad2, Layers, Package, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { api, isDesktop, pickFolder, type Game, type StoredMod } from "../api";
+import { Compass, ExternalLink, FolderOpen, Gamepad2, Info, Layers, Package, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { TmlPanel } from "./TmlPanel";
+import { api, playWithoutMods, isDesktop, modFolderHelp, openUrl, pickFolder, type Game, type GameState, type StoredMod } from "../api";
+import { usePlayLabel } from "../GameStatus";
 import type { Ctx } from "../App";
 import { Cover } from "../art";
-import { plural } from "../format";
+import { bytes, plural } from "../format";
 import { SteamFolders } from "./SteamFolders";
-import { Dialog, DiskBar } from "../ui";
+import { AddGame } from "./AddGame";
+import { Dialog } from "../ui";
 
-/** Add a game, or change where an existing one is and where its mods go. */
-export function GameDialog({ game, onClose, onSaved }: { game?: Game; onClose: () => void; onSaved: () => void }) {
+/** Add a game, or change where an existing one is and where its mods go. Every folder can be
+ * picked with Browse; the mod folder is kept relative to the install folder. */
+export function GameDialog({ game, onClose, onSaved, focusModFolder }: { game?: Game; onClose: () => void; onSaved: () => void; focusModFolder?: boolean }) {
   const [domain, setDomain] = useState(game?.domain ?? "");
   const [name, setName] = useState(game?.name ?? "");
   const [path, setPath] = useState(game?.path ?? "");
-  const [modFolder, setModFolder] = useState(game?.modFolder ?? "");
+  // null: not known yet. "": straight into the install folder. Otherwise a folder inside it.
+  const [modFolder, setModFolder] = useState<string | null>(game?.modFolder ?? null);
   const [launch, setLaunch] = useState(game?.launch ?? "");
+  const [saveFolder, setSaveFolder] = useState(game?.saveFolder ?? "");
   const [error, setError] = useState("");
   const steam = game?.source === "steam";
+  const shownName = name || game?.name || domain;
   const save = async () => {
     try {
-      await api.addGame(domain, name, path, modFolder, launch);
+      await api.addGame(domain, name, path, modFolder === null ? null : modFolder, launch, null, saveFolder.trim() || null);
       onSaved();
       onClose();
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+  /** A folder picked anywhere, as a path inside the install folder (or why it can't be). */
+  const pickModFolder = async () => {
+    setError("");
+    const picked = await pickFolder("Where this game's mods go (inside its install folder)", path ? `${path}/${modFolder ?? ""}` : undefined);
+    if (!picked) return;
+    const root = path.replace(/\/+$/, "");
+    if (!root) return setError("Choose the install folder first.");
+    if (picked === root) return setModFolder("");
+    if (!picked.startsWith(`${root}/`)) return setError("Pick a folder inside the install folder. Mods for this game go somewhere in there.");
+    setModFolder(picked.slice(root.length + 1));
   };
   return (
     <Dialog
@@ -31,6 +50,11 @@ export function GameDialog({ game, onClose, onSaved }: { game?: Game; onClose: (
       onClose={onClose}
       foot={
         <>
+          {shownName && !game?.modTool && (
+            <button className="btn left" title={`Searches the web for where ${shownName} mods go`} onClick={() => void openUrl(modFolderHelp(shownName))}>
+              <ExternalLink size={14} /> Help
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
@@ -54,24 +78,54 @@ export function GameDialog({ game, onClose, onSaved }: { game?: Game; onClose: (
             <input placeholder="Skyrim Special Edition" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
         )}
-        <label className="field full">
+        <div className="field full">
           <span>Install folder</span>
           <div className="row gap-sm">
-            <input className="grow" placeholder={steam ? "Found in Steam" : "Where the game is installed"} value={path} onChange={(e) => setPath(e.target.value)} />
+            <input className="grow" placeholder={steam ? "Found in Steam" : "Where the game is installed"} value={path} onChange={(e) => setPath(e.target.value)} aria-label="Install folder" />
             {isDesktop && (
               <button className="btn" onClick={async () => setPath((await pickFolder("Where the game is installed", path || undefined)) ?? path)}>
-                Choose…
+                <FolderOpen size={14} /> Browse…
               </button>
             )}
           </div>
-        </label>
-        <label className="field full">
+        </div>
+        <div className="field full">
           <span>Mod folder</span>
-          <input placeholder="Data" value={modFolder} onChange={(e) => setModFolder(e.target.value)} />
-          <span className="hint">
-            Where mods, textures and skins go, inside the install folder: <b>Data</b> for Skyrim and Fallout, <b>Mods</b> for Stardew Valley with SMAPI. Leave it empty when mods go straight into the install folder (Cyberpunk 2077).
-          </span>
-        </label>
+          {game?.modTool ? (
+            <span className="hint">{game.modTool}</span>
+          ) : (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={modFolder === ""} onChange={(e) => setModFolder(e.target.checked ? "" : null)} /> Mods go straight into the install folder
+              </label>
+              {modFolder !== "" && (
+                <div className="row gap-sm">
+                  <input className="grow" autoFocus={focusModFolder} placeholder="Not set yet, for example Data or Mods" value={modFolder ?? ""} onChange={(e) => setModFolder(e.target.value.trim() ? e.target.value : null)} aria-label="Mod folder" />
+                  {isDesktop && (
+                    <button className="btn" onClick={() => void pickModFolder()}>
+                      <FolderOpen size={14} /> Browse…
+                    </button>
+                  )}
+                </div>
+              )}
+              <span className="hint">
+                Where mods, textures and skins go: <b>Data</b> for Skyrim and Fallout, <b>Mods</b> for Stardew Valley with SMAPI, the install folder itself for Cyberpunk 2077.{" "}
+              </span>
+            </>
+          )}
+        </div>
+        <div className="field full">
+          <span>Save folder</span>
+          <div className="row gap-sm">
+            <input className="grow" placeholder="Not known: only needed for saves per profile" value={saveFolder} onChange={(e) => setSaveFolder(e.target.value)} aria-label="Save folder" />
+            {isDesktop && (
+              <button className="btn" onClick={async () => setSaveFolder((await pickFolder("Where the game keeps its saves", saveFolder || undefined)) ?? saveFolder)}>
+                <FolderOpen size={14} /> Browse…
+              </button>
+            )}
+          </div>
+          <span className="hint">Where the game keeps its saves. Profiles set to keep their own saves swap this folder when they go into the game. Known for most big games already.</span>
+        </div>
         {!steam && (
           <label className="field full">
             <span>Start command</span>
@@ -85,10 +139,19 @@ export function GameDialog({ game, onClose, onSaved }: { game?: Game; onClose: (
   );
 }
 
-export function Games({ toast, go, libraryVersion, reloadGames }: Ctx) {
+/** A folder for a game's mods on the game's own drive: beside its Steam library ("…/SteamLibrary/Zom's Nexus mods"), or next to the game's folder. */
+export function sameDriveFolder(gamePath: string): string | null {
+  const i = gamePath.indexOf("/steamapps/");
+  if (i > 0) return `${gamePath.slice(0, i)}/Zom's Nexus mods`;
+  const parent = gamePath.replace(/\/+$/, "").split("/").slice(0, -1).join("/");
+  return parent ? `${parent}/Zom's Nexus mods` : null;
+}
+
+export function Games({ toast, go, libraryVersion, reloadGames, gameStates }: Ctx) {
   const [games, setGames] = useState<Game[] | null>(null);
   const [mods, setMods] = useState<StoredMod[]>([]);
-  const [editing, setEditing] = useState<Game | "new" | null>(null);
+  const [editing, setEditing] = useState<{ game?: Game; focus?: boolean } | null>(null);
+  const [adding, setAdding] = useState(false);
   const load = () => {
     api.games().then(setGames, (e) => toast((e as Error).message));
     reloadGames();
@@ -109,18 +172,19 @@ export function Games({ toast, go, libraryVersion, reloadGames }: Ctx) {
     <div className="page">
       <div className="page-head">
         <h1>Games</h1>
-        <button className="btn" onClick={() => setEditing("new")}>
+        <button className="btn" onClick={() => setAdding(true)}>
           <Plus size={15} /> Add game…
         </button>
       </div>
       <p className="muted" style={{ marginTop: -8 }}>
         Games Steam has installed are found by themselves, in every Steam library folder (listed below), whether they run natively or through Proton. Add any other game by hand.
       </p>
+      <GoneList toast={toast} />
       {games === null ? null : games.length === 0 ? (
         <div className="empty">
           <Gamepad2 size={32} />
           <p>No Nexus Mods games were found in Steam. Add a game by hand to keep its mods together.</p>
-          <button className="btn primary" onClick={() => setEditing("new")}>
+          <button className="btn primary" onClick={() => setAdding(true)}>
             Add game…
           </button>
         </div>
@@ -141,18 +205,43 @@ export function Games({ toast, go, libraryVersion, reloadGames }: Ctx) {
                   {g.name}
                 </div>
                 <div className="sub">
-                  {g.source === "steam" ? (g.protonPrefix ? "Steam, Proton" : "Steam") : "Added by you"} · {count(g.domain) ? plural(count(g.domain), "mod") : "no mods yet"}
+                  {g.source === "steam" ? (g.protonPrefix ? `Steam, ${g.proton ?? "Proton"}` : "Steam") : g.source === "heroic" ? `Heroic${g.proton ? `, ${g.proton}` : ""}` : g.source === "lutris" ? `Lutris${g.proton ? `, ${g.proton}` : ""}` : "Added by you"} · {count(g.domain) ? plural(count(g.domain), "mod") : "no mods yet"}
                 </div>
-                {g.freeSpace != null && (
-                  <div style={{ marginTop: 6 }}>
-                    <DiskBar free={g.freeSpace} total={g.totalSpace} label="its drive" />
+                {g.freeSpace != null && g.totalSpace && g.freeSpace / g.totalSpace < 0.1 && (
+                  <div className="warn-text small" title="Mods copied into this game need room on its drive">
+                    Its drive is nearly full: {bytes(g.freeSpace)} left
                   </div>
                 )}
-                {g.modFolder == null && <div className="warn-text">Set where its mods go</div>}
+                {g.modTool ? (
+                  <div className="muted small row gap-sm" title={g.modTool}>
+                    <Info size={12} /> Uses its own mod tool
+                  </div>
+                ) : (
+                  g.modFolder == null && (
+                    <div className="small row gap-sm wrap">
+                      <button className="link-name accent-link" onClick={() => setEditing({ game: g, focus: true })}>
+                        Mod folder not set · Set it
+                      </button>
+                    </div>
+                  )
+                )}
+                {g.modsCopied && (
+                  <div className="muted small row gap-sm wrap" title="Your mod library is on another drive (an SD card, say), so Play copies mods into this game instead of linking them: twice the space, and slower for big packs.">
+                    Mods are copied here (library on another drive)
+                    {g.path && sameDriveFolder(g.path) && (
+                      <button className="btn sm ghost" onClick={() => act(api.moveGameLibrary(g.domain, sameDriveFolder(g.path!)!), `Moving ${g.name}'s mods to its own drive`)} title={`Keeps ${g.name}'s mods in ${sameDriveFolder(g.path)}, so they're linked, not copied`}>
+                        Keep its mods on its drive
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="row gap-sm" style={{ marginTop: 8 }}>
                   {(g.steamAppId || g.launch) && (
-                    <button className="btn sm primary" onClick={() => act(api.launch(g.domain), `Starting ${g.name}`)} title="Start the game with the mods that are in it now">
-                      <Play size={13} /> Play
+                    <GamePlay state={gameStates[g.domain]} onPlay={() => act(api.launch(g.domain), `Starting ${g.name}`)} />
+                  )}
+                  {g.activeProfile && (g.steamAppId || g.launch) && (
+                    <button className="btn sm ghost" title="Take the mods out and start the game as it came" onClick={() => act(playWithoutMods(g.domain), `Starting ${g.name} without mods`)}>
+                      Without mods
                     </button>
                   )}
                   <span className="grow" />
@@ -172,7 +261,7 @@ export function Games({ toast, go, libraryVersion, reloadGames }: Ctx) {
                       <FolderOpen size={15} />
                     </button>
                   )}
-                  <button className="icon-btn" title="Folders and start command" aria-label="Edit game" onClick={() => setEditing(g)}>
+                  <button className="icon-btn" title="Folders and start command" aria-label="Edit game" onClick={() => setEditing({ game: g })}>
                     <Pencil size={15} />
                   </button>
                   {g.source === "added" && (
@@ -186,8 +275,31 @@ export function Games({ toast, go, libraryVersion, reloadGames }: Ctx) {
           ))}
         </div>
       )}
+      <TmlPanel toast={toast} />
       <SteamFolders />
-      {editing && <GameDialog game={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} onSaved={load} />}
+      {adding && (
+        <AddGame
+          games={games ?? []}
+          toast={toast}
+          onClose={() => setAdding(false)}
+          onAdded={load}
+          onManual={() => {
+            setAdding(false);
+            setEditing({});
+          }}
+        />
+      )}
+      {editing && <GameDialog game={editing.game} focusModFolder={editing.focus} onClose={() => setEditing(null)} onSaved={load} />}
     </div>
+  );
+}
+
+/** The card's Play, showing whether the game is starting or running. */
+function GamePlay({ state, onPlay }: { state?: GameState; onPlay: () => void }) {
+  const p = usePlayLabel(state);
+  return (
+    <button className={`btn sm ${p.tone === "ok" ? "playing" : p.tone === "bad" ? "play-bad" : "primary"}`} disabled={p.busy} onClick={onPlay} title={state?.state === "failed" ? state.detail ?? undefined : "Start the game with the mods that are in it now"}>
+      <Play size={13} /> {p.label ?? "Play"}
+    </button>
   );
 }

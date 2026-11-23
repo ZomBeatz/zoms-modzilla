@@ -71,6 +71,12 @@ pub struct StoredFile {
     /// Whether the download matched Nexus Mods' checksum for this file (None: not checked).
     #[serde(default)]
     pub verified: Option<bool>,
+    /// The choices made in the file's installer (FOMOD) and the folder they built.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed: Option<crate::fomod::Installed>,
+    /// Whether the unpacked file has an installer (FOMOD). Filled in when the library is read.
+    #[serde(default, skip_deserializing)]
+    pub has_installer: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,12 +94,24 @@ pub struct StoredMod {
     /// up (at or above LOCAL_IDS), so it's never looked up on Nexus Mods or put in a mod pack.
     #[serde(default)]
     pub local: bool,
+    /// Marked as adult content on Nexus Mods (when it was downloaded).
+    #[serde(default)]
+    pub adult: bool,
+    /// Where it came from when not Nexus Mods: "thunderstore:Owner-Name".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     /// Filled in when the library is read, never saved.
     #[serde(default, skip_deserializing)]
     pub folder: String,
 }
 
+/// Longest name kept, in bytes (Linux allows 255 per name; this leaves room for
+/// `.<name>.unpacking` and " files").
+const NAME_BYTES: usize = 200;
+
 /// A name that's safe as one folder or file name: no slashes, no leading dots, not too long.
+/// A long name is shortened in the middle of its words, never at its ending (".zip" stays), so
+/// a file and the folder it unpacks into never end up with the same name.
 pub fn safe_name(s: &str) -> String {
     let cleaned: String = s
         .chars()
@@ -101,17 +119,96 @@ pub fn safe_name(s: &str) -> String {
         .collect();
     let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
     let trimmed = cleaned.trim_start_matches(['.', ' ']).trim();
-    let mut out: String = trimmed.chars().take(80).collect();
+    let mut out = if trimmed.len() <= NAME_BYTES {
+        trimmed.to_string()
+    } else {
+        let ext = trimmed.rfind('.').map(|i| &trimmed[i..]).filter(|e| e.len() <= 10 && e[1..].chars().all(|c| c.is_ascii_alphanumeric()) && e.len() > 1).unwrap_or("");
+        let mut head = String::new();
+        for c in trimmed.chars() {
+            if head.len() + c.len_utf8() + ext.len() > NAME_BYTES {
+                break;
+            }
+            head.push(c);
+        }
+        format!("{}{ext}", head.trim_end_matches(['.', ' ']))
+    };
     out = out.trim_end_matches(['.', ' ']).to_string();
     if out.is_empty() { "mod".into() } else { out }
 }
 
+/// Games whose mods live under another folder than the library's (Settings › Storage): game →
+/// that folder, which holds `<game>/<mod>` like the library does. Every library path goes
+/// through `game_dir`, so everything follows it.
+static ROOTS: std::sync::Mutex<std::collections::BTreeMap<String, PathBuf>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+pub fn set_roots(roots: &std::collections::BTreeMap<String, String>) {
+    *ROOTS.lock().unwrap() = roots.iter().filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k.clone(), PathBuf::from(v))).collect();
+}
+
+/// The folder holding a game's `<game>` folder: its own, or the library.
+pub fn root_for(lib: &Path, game: &str) -> PathBuf {
+    ROOTS.lock().unwrap().get(game).cloned().unwrap_or_else(|| lib.to_path_buf())
+}
+
 /// A game's Nexus Mods name is already safe, but check before it becomes a folder.
-fn game_dir(lib: &Path, game: &str) -> Result<PathBuf, String> {
+pub fn game_dir(lib: &Path, game: &str) -> Result<PathBuf, String> {
     if game.is_empty() || !game.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return Err("That isn't a game name Nexus Mods uses.".into());
     }
-    Ok(lib.join(game))
+    Ok(root_for(lib, game).join(game))
+}
+
+/// Copy a folder's files and folders (links skipped) into `to`, which must not exist yet.
+fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
+    fs::create_dir_all(to).map_err(|e| format!("Couldn't make {}: {e}", to.display()))?;
+    for e in fs::read_dir(from).map_err(|e| e.to_string())?.flatten() {
+        let Ok(t) = e.file_type() else { continue };
+        let dest = to.join(e.file_name());
+        if t.is_dir() {
+            copy_tree(&e.path(), &dest)?;
+        } else if t.is_file() {
+            fs::copy(e.path(), &dest).map_err(|err| format!("Couldn't copy {}: {err}", e.path().display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Move a game's mods from one root to another (`<from>/<game>` → `<to>/<game>`). Renamed when
+/// both are on one drive; otherwise copied in full first and only then deleted, so a failure
+/// leaves the original. Downloads wait their turn meanwhile. Gives the bytes moved.
+pub fn move_game(from_root: &Path, to_root: &Path, game: &str) -> Result<u64, String> {
+    let _turn = turn();
+    if game.is_empty() || !game.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("That isn't a game name Nexus Mods uses.".into());
+    }
+    let (from, to) = (from_root.join(game), to_root.join(game));
+    if !from.is_dir() {
+        // No mods yet: the folder is made now, for the first ones.
+        fs::create_dir_all(&to).map_err(|e| format!("Couldn't use {}: {e}", to_root.display()))?;
+        return Ok(0);
+    }
+    if to.exists() && fs::read_dir(&to).map(|mut d| d.next().is_some()).unwrap_or(true) {
+        return Err(format!("{} already has files in it. Pick an empty folder, or clear it first.", to.display()));
+    }
+    let size = dir_size(&from);
+    fs::create_dir_all(to_root).map_err(|e| format!("Couldn't use {}: {e}", to_root.display()))?;
+    let _ = fs::remove_dir(&to);
+    if fs::rename(&from, &to).is_ok() {
+        return Ok(size);
+    }
+    let free = crate::settings::free_space(to_root).unwrap_or(u64::MAX);
+    if free < size + SPARE {
+        return Err(format!("{} has {} MB free; the mods need {} MB.", to_root.display(), free / 1_000_000, size / 1_000_000));
+    }
+    let tmp = to_root.join(format!(".{game}.moving"));
+    let _ = fs::remove_dir_all(&tmp);
+    if let Err(e) = copy_tree(&from, &tmp) {
+        let _ = fs::remove_dir_all(&tmp);
+        return Err(e);
+    }
+    fs::rename(&tmp, &to).map_err(|e| e.to_string())?;
+    fs::remove_dir_all(&from).map_err(|e| format!("Copied, but couldn't delete the old folder {}: {e}", from.display()))?;
+    Ok(size)
 }
 
 /// The mod's folder: an existing one for this mod number (even if the mod was renamed since), or
@@ -136,7 +233,7 @@ pub fn read_meta(dir: &Path) -> Option<StoredMod> {
     Some(m)
 }
 
-fn write_meta(dir: &Path, m: &StoredMod) -> Result<(), String> {
+pub fn write_meta(dir: &Path, m: &StoredMod) -> Result<(), String> {
     crate::settings::write_atomic(&dir.join(META), &serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?)
 }
 
@@ -186,14 +283,16 @@ fn put(lib: &Path, part: Option<&Path>, game: &str, info: &ModInfo, file: &FileI
         summary: None,
         picture_url: None,
         files: vec![],
-        local: false,
+        local: false, adult: false,
         folder: String::new(),
+        source: None,
     });
     meta.name = info.name.clone();
     meta.author = info.author.clone();
     meta.version = info.version.clone();
     meta.summary = info.summary.clone();
     meta.picture_url = info.picture_url.clone();
+    meta.adult = info.adult;
 
     // Downloading the same file again replaces the old copy.
     let old = meta.files.iter().position(|f| f.file_id == file.file_id).map(|i| meta.files.remove(i));
@@ -218,9 +317,11 @@ fn put(lib: &Path, part: Option<&Path>, game: &str, info: &ModInfo, file: &FileI
         size: file.size,
         downloaded_at: now,
         archive: Some(name),
-        unpacked: old.and_then(|o| o.unpacked),
+        unpacked: old.as_ref().and_then(|o| o.unpacked.clone()),
         uploaded: file.uploaded,
         verified: None,
+        installed: old.and_then(|o| o.installed),
+        has_installer: false,
     });
     write_meta(&dir, &meta)?;
     Ok((dir, dest))
@@ -247,6 +348,20 @@ pub fn set_unpacked(dir: &Path, file_id: u64, unpacked: Option<String>, drop_arc
             }
         }
     }
+    write_meta(dir, &meta)
+}
+
+/// Keep (or forget, with None) the installer choices for one file. A forgotten built folder is deleted.
+pub fn set_installed(dir: &Path, file_id: u64, installed: Option<crate::fomod::Installed>) -> Result<(), String> {
+    let _turn = turn();
+    let mut meta = read_meta(dir).ok_or("This mod's nexus.json is missing.")?;
+    let f = meta.files.iter_mut().find(|f| f.file_id == file_id).ok_or("That file isn't in the library any more.")?;
+    if let Some(old) = f.installed.take() {
+        if installed.as_ref().map(|i| &i.folder) != Some(&old.folder) {
+            let _ = fs::remove_dir_all(dir.join(safe_name(&old.folder)));
+        }
+    }
+    f.installed = installed;
     write_meta(dir, &meta)
 }
 
@@ -346,15 +461,25 @@ pub fn set_verified(dir: &Path, file_id: u64, ok: bool) -> Result<(), String> {
 
 /// Every mod in the library, newest download first.
 pub fn list(lib: &Path) -> Vec<StoredMod> {
+    let roots = ROOTS.lock().unwrap().clone();
+    list_with(lib, &roots)
+}
+
+fn list_with(lib: &Path, roots: &std::collections::BTreeMap<String, PathBuf>) -> Vec<StoredMod> {
     let mut out = vec![];
-    let Ok(games) = fs::read_dir(lib) else { return out };
-    for g in games.flatten() {
-        if g.file_name().to_string_lossy().starts_with('.') || !g.path().is_dir() {
+    // The library's own games (not ones kept elsewhere), then each game kept elsewhere.
+    let main = fs::read_dir(lib).into_iter().flatten().flatten().filter(|g| !roots.contains_key(&*g.file_name().to_string_lossy())).map(|g| g.path());
+    let elsewhere = roots.iter().map(|(game, root)| root.join(game));
+    for g in main.chain(elsewhere).collect::<Vec<_>>() {
+        if g.file_name().map(|n| n.to_string_lossy().starts_with('.')).unwrap_or(true) || !g.is_dir() {
             continue;
         }
-        let Ok(mods) = fs::read_dir(g.path()) else { continue };
+        let Ok(mods) = fs::read_dir(&g) else { continue };
         for m in mods.flatten() {
-            if let Some(meta) = read_meta(&m.path()) {
+            if let Some(mut meta) = read_meta(&m.path()) {
+                for f in &mut meta.files {
+                    f.has_installer = f.unpacked.as_ref().is_some_and(|u| crate::fomod::root(&m.path().join(safe_name(u))).is_some());
+                }
                 out.push(meta);
             }
         }
@@ -389,11 +514,26 @@ pub fn remove_file(lib: &Path, game: &str, mod_id: u64, file_id: u64) -> Result<
         if let Some(u) = f.unpacked {
             let _ = fs::remove_dir_all(dir.join(safe_name(&u)));
         }
+        if let Some(i) = f.installed {
+            let _ = fs::remove_dir_all(dir.join(safe_name(&i.folder)));
+        }
     }
     if meta.files.is_empty() {
         return fs::remove_dir_all(&dir).map_err(|e| format!("Couldn't delete {}: {e}", dir.display()));
     }
     write_meta(&dir, &meta)
+}
+
+/// Delete every mod of a game from the library (its whole folder there). Gives the bytes freed.
+pub fn remove_game(lib: &Path, game: &str) -> Result<u64, String> {
+    let _turn = turn();
+    let dir = game_dir(lib, game)?;
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    let size = dir_size(&dir);
+    fs::remove_dir_all(&dir).map_err(|e| format!("Couldn't delete {}: {e}", dir.display()))?;
+    Ok(size)
 }
 
 pub fn remove_mod(lib: &Path, game: &str, mod_id: u64) -> Result<(), String> {
@@ -432,8 +572,13 @@ pub fn unpack(archive: &Path) -> Result<String, String> {
         Some(i) if i > 0 => file[..i].to_string(),
         _ => format!("{file} files"),
     };
-    let name = safe_name(&stem);
+    let mut name = safe_name(&stem);
+    // Never the archive itself (an archive saved without its ending, say).
+    if dir.join(&name) == archive || dir.join(&name).is_file() {
+        name = safe_name(&format!("{stem} files"));
+    }
     let dest = dir.join(&name);
+    check_bomb(archive)?;
     let need = unpacked_size(archive).unwrap_or_else(|| fs::metadata(archive).map(|m| m.len() * 3).unwrap_or(0));
     ensure_space(dir, need, &format!("unpacking {file}"))?;
     // Unpack into a temporary folder first, so a failure never leaves half a folder behind.
@@ -453,6 +598,34 @@ pub fn unpack(archive: &Path) -> Result<String, String> {
     let _ = fs::remove_dir_all(&dest);
     fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
     Ok(name)
+}
+
+/// Most files one archive may hold, and how much bigger than itself it may unpack to (past
+/// 4 GB). Real mods stay far below both; an archive past them is refused, not unpacked.
+const MAX_FILES: usize = 250_000;
+const MAX_RATIO: u64 = 100;
+
+fn entry_count(archive: &Path) -> Option<usize> {
+    match kind(archive) {
+        Kind::Zip => Some(zip::ZipArchive::new(fs::File::open(archive).ok()?).ok()?.len()),
+        Kind::SevenZ => Some(sevenz_rust2::Archive::open(archive).ok()?.files.len()),
+        _ => None,
+    }
+}
+
+/// Refuse archives that would unpack into far more than any mod needs (a "zip bomb").
+pub fn check_bomb(archive: &Path) -> Result<(), String> {
+    let file = archive.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if entry_count(archive).is_some_and(|n| n > MAX_FILES) {
+        return Err(format!("{file} holds more than {MAX_FILES} files, far more than a mod has, so it wasn't unpacked."));
+    }
+    let packed = fs::metadata(archive).map(|m| m.len()).unwrap_or(0).max(1);
+    if let Some(u) = unpacked_size(archive) {
+        if u > 4_000_000_000 && u / packed > MAX_RATIO {
+            return Err(format!("{file} says it unpacks to {} GB from {} MB, which no mod does, so it wasn't unpacked.", u / 1_000_000_000, packed / 1_000_000));
+        }
+    }
+    Ok(())
 }
 
 /// How big an archive's files are once unpacked, when the archive says (zip and 7z do).
@@ -508,9 +681,11 @@ pub fn import(lib: &Path, game: &str, src: &Path, now: u64) -> Result<StoredMod,
         version: None,
         summary: None,
         picture_url: None,
-        files: vec![StoredFile { file_id: id, name: file.clone(), file_name: file, version: None, category: None, size, downloaded_at: now, archive: Some(archive), unpacked: None, uploaded: None, verified: None }],
+        files: vec![StoredFile { file_id: id, name: file.clone(), file_name: file, version: None, category: None, size, downloaded_at: now, archive: Some(archive), unpacked: None, uploaded: None, verified: None, installed: None, has_installer: false }],
         local: true,
+        adult: false,
         folder: String::new(),
+        source: None,
     };
     write_meta(&dir, &meta)?;
     meta.folder = dir.to_string_lossy().into_owned();
@@ -545,7 +720,12 @@ fn unzip(archive: &Path, dest: &Path) -> Result<(), String> {
             fs::create_dir_all(p).map_err(|e| e.to_string())?;
         }
         let mut w = fs::File::create(&out).map_err(|e| e.to_string())?;
-        std::io::copy(&mut entry, &mut w).map_err(|e| format!("Couldn't unpack {}: {e}", rel.display()))?;
+        // Never more than the entry says it holds (a lying header can't fill the drive).
+        let most = entry.size();
+        let n = std::io::copy(&mut std::io::Read::take(&mut entry, most + 1), &mut w).map_err(|e| format!("Couldn't unpack {}: {e}", rel.display()))?;
+        if n > most {
+            return Err(format!("{} in the zip file is bigger than it says, so the zip wasn't unpacked.", rel.display()));
+        }
     }
     Ok(())
 }
@@ -570,6 +750,25 @@ fn unrar(archive: &Path, dest: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn games_can_live_elsewhere_and_move() {
+        let d = tempfile::tempdir().unwrap();
+        let (lib, other) = (d.path().join("lib"), d.path().join("other"));
+        let m = lib.join("testgameroots/5 - Five");
+        fs::create_dir_all(&m).unwrap();
+        fs::write(m.join(META), r#"{"game":"testgameroots","modId":5,"name":"Five","files":[]}"#).unwrap();
+        assert!(list(&lib).iter().any(|x| x.game == "testgameroots"));
+        assert!(move_game(&lib, &other, "testgameroots").unwrap() > 0);
+        let mut roots = std::collections::BTreeMap::new();
+        roots.insert("testgameroots".to_string(), other.clone());
+        let found = list_with(&lib, &roots);
+        assert_eq!(found.iter().filter(|x| x.game == "testgameroots").count(), 1);
+        assert!(found[0].folder.starts_with(&*other.to_string_lossy()));
+        // A folder that already has files is never written over.
+        fs::create_dir_all(lib.join("testgameroots/x")).unwrap();
+        assert!(move_game(&other, &lib, "testgameroots").is_err());
+    }
     use std::io::Write;
 
     #[test]
@@ -605,6 +804,13 @@ mod tests {
         assert_eq!(safe_name("a:b*c?"), "a b c");
         assert_eq!(safe_name(""), "mod");
         assert_eq!(safe_name("..."), "mod");
+        // Long names keep their ending, so a file never clashes with the folder it unpacks into.
+        let long = format!("{} KRvfRxIYU.zip", "Atomiic x Hyst - Dia Angels Garb - Archive XL 33142 1 2026-08-25T18-32Z ".repeat(4));
+        let short = safe_name(&long);
+        assert!(short.ends_with(".zip") && short.len() <= 200, "{short}");
+        assert_eq!(safe_name(&short), short, "already safe names don't change");
+        let old = "Atomiic x Hyst - Dia Angels Garb - Archive XL 33142 1 2026-08-25T18-32Z KRvfRxIY";
+        assert_eq!(safe_name(old), old);
     }
 
     fn info(id: u64, name: &str) -> ModInfo {

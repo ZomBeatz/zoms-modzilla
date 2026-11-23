@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-collection-update"
+description = "Enables the profile_collection_update command without any pre-configured scope."
+commands.allow = ["profile_collection_update"]
+
+[[permission]]
+identifier = "deny-profile-collection-update"
+description = "Denies the profile_collection_update command without any pre-configured scope."
+commands.deny = ["profile_collection_update"]

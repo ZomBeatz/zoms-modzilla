@@ -2,8 +2,9 @@
 // just that game. The menu lists your most recent games (up to 5, fewer when the window is
 // short); "All games…" opens a selector with every game.
 
+import { recentProfiles, type RecentProfile } from "./nav";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Gamepad2, LayoutGrid, Search } from "lucide-react";
+import { Check, ChevronDown, Gamepad2, Layers, LayoutGrid, Search } from "lucide-react";
 import type { Game } from "./api";
 import { Cover } from "./art";
 import { Dialog } from "./ui";
@@ -17,7 +18,7 @@ export function ordered(games: Game[], recent: string[]): Game[] {
   return [...byRecent, ...games.filter((g) => !recent.includes(g.domain)).sort((a, b) => a.name.localeCompare(b.name))];
 }
 
-export function GamePicker({ games, game, recent, onPick, onManage }: { games: Game[]; game: string | null; recent: string[]; onPick: (g: string) => void; onManage: () => void }) {
+export function GamePicker({ games, game, recent, onPick, onManage, onProfile }: { games: Game[]; game: string | null; recent: string[]; onPick: (g: string) => void; onManage: () => void; onProfile?: (p: RecentProfile) => void }) {
   const [open, setOpen] = useState(false);
   const [more, setMore] = useState(false);
   const [fits, setFits] = useState(MOST);
@@ -73,6 +74,32 @@ export function GamePicker({ games, game, recent, onPick, onManage }: { games: G
               {game === g.domain && <Check size={14} />}
             </button>
           ))}
+          {onProfile && recentProfiles().filter((p) => games.some((g) => g.domain === p.game)).length > 0 && (
+            <>
+              <div className="menu-sep" />
+              <div className="menu-head">Recent profiles</div>
+              {recentProfiles()
+                .filter((p) => games.some((g) => g.domain === p.game))
+                .slice(0, 4)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    role="menuitem"
+                    className="menu-item"
+                    onClick={() => {
+                      setOpen(false);
+                      onProfile(p);
+                    }}
+                  >
+                    <Layers size={14} />
+                    <span className="grow ellipsis">{p.name}</span>
+                    <span className="muted small ellipsis" style={{ maxWidth: 90 }}>
+                      {games.find((g) => g.domain === p.game)?.name}
+                    </span>
+                  </button>
+                ))}
+            </>
+          )}
           <div className="menu-sep" />
           <button role="menuitem" className="menu-item" onClick={() => setMore(true)}>
             <LayoutGrid size={14} />

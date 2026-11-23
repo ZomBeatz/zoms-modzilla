@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-steam-add"
+description = "Enables the steam_add command without any pre-configured scope."
+commands.allow = ["steam_add"]
+
+[[permission]]
+identifier = "deny-steam-add"
+description = "Denies the steam_add command without any pre-configured scope."
+commands.deny = ["steam_add"]

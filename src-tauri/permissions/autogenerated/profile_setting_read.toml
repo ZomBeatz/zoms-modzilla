@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-setting-read"
+description = "Enables the profile_setting_read command without any pre-configured scope."
+commands.allow = ["profile_setting_read"]
+
+[[permission]]
+identifier = "deny-profile-setting-read"
+description = "Denies the profile_setting_read command without any pre-configured scope."
+commands.deny = ["profile_setting_read"]

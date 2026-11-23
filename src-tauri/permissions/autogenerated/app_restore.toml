@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-app-restore"
+description = "Enables the app_restore command without any pre-configured scope."
+commands.allow = ["app_restore"]
+
+[[permission]]
+identifier = "deny-app-restore"
+description = "Denies the app_restore command without any pre-configured scope."
+commands.deny = ["app_restore"]

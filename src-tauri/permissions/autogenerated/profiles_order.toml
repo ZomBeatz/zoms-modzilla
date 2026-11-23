@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profiles-order"
+description = "Enables the profiles_order command without any pre-configured scope."
+commands.allow = ["profiles_order"]
+
+[[permission]]
+identifier = "deny-profiles-order"
+description = "Denies the profiles_order command without any pre-configured scope."
+commands.deny = ["profiles_order"]

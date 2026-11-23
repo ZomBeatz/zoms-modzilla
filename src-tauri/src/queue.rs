@@ -150,6 +150,10 @@ pub struct Queue {
     premium: Arc<std::sync::atomic::AtomicBool>,
 }
 
+fn game_running() -> bool {
+    crate::activity::game_states().iter().any(|g| g.state == "running")
+}
+
 /// What a download attempt ended with.
 enum Outcome {
     Stored(PathBuf),
@@ -163,10 +167,13 @@ impl Queue {
     pub fn new(app: Option<AppHandle>, data_dir: PathBuf, settings: Arc<Mutex<Settings>>, nexus: Nexus) -> Self {
         let file = data_dir.join("queue.json");
         let mut jobs: Vec<Job> = std::fs::read_to_string(&file).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        // Anything that was running when the app closed waits for its turn again.
+        // Anything that was running when the app closed waits for its turn again, and so does
+        // anything waiting to try again (its timer ended with the app).
+        // Unless the person wants them kept paused at start.
+        let resume = settings.lock().unwrap().resume_on_start != "no";
         for j in &mut jobs {
-            if j.status.running() {
-                j.status = Status::Queued;
+            if j.status.running() || j.status == Status::Waiting {
+                j.status = if resume { Status::Queued } else { Status::Paused };
             }
             j.speed = 0;
         }
@@ -181,7 +188,11 @@ impl Queue {
         tauri::async_runtime::spawn(async move {
             loop {
                 q.schedule();
-                q.wake.notified().await;
+                // Also look once a minute, for download hours and games starting or closing.
+                tokio::select! {
+                    _ = q.wake.notified() => {}
+                    _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+                }
             }
         });
     }
@@ -196,7 +207,22 @@ impl Queue {
         self.wake.notify_one();
     }
 
+    /// Why new downloads wait now, if they do: outside the download hours, or a game is running.
+    pub fn held(&self) -> Option<String> {
+        let s = self.settings.lock().unwrap().clone();
+        if !s.may_start(crate::log::hour_now()) {
+            return Some(format!("Downloads start between {}:00 and {}:00 (Settings).", s.hours_from, s.hours_to));
+        }
+        if s.while_playing != "carry" && game_running() {
+            return Some("A game is running, so downloads wait until it closes (Settings).".into());
+        }
+        None
+    }
+
     fn schedule(&self) {
+        if self.held().is_some() {
+            return;
+        }
         let slots = self.settings.lock().unwrap().slots(self.premium.load(std::sync::atomic::Ordering::Relaxed));
         let mut st = self.state.lock().unwrap();
         let mut running = st.jobs.iter().filter(|j| j.status.running()).count();
@@ -590,6 +616,7 @@ impl Queue {
                 }
             }
             Outcome::NeedsLink(msg) => {
+                crate::log::info(&format!("{id}: needs a link: {msg}"));
                 self.update(&id, |j| {
                     if j.status.running() {
                         j.status = Status::NeedsLink;
@@ -599,6 +626,7 @@ impl Queue {
                 });
             }
             Outcome::Retry(msg) if auto_retry && self.get(&id).map(|j| j.retries < 3) == Some(true) => {
+                crate::log::warn(&format!("{id}: trying again soon: {msg}"));
                 let tries = self.get(&id).map(|j| j.retries).unwrap_or(0) + 1;
                 self.update(&id, |j| {
                     if j.status.running() {
@@ -620,7 +648,34 @@ impl Queue {
                     }
                 });
             }
+            // After the quick tries: later, in 5 minutes, 30 minutes, then 2 hours.
+            Outcome::Retry(msg) if auto_retry && self.settings.lock().unwrap().retry_later && self.get(&id).map(|j| j.retries < 6) == Some(true) => {
+                let tries = self.get(&id).map(|j| j.retries).unwrap_or(0) + 1;
+                let wait = [300u64, 1800, 7200][(tries as usize).saturating_sub(4).min(2)];
+                crate::log::warn(&format!("{id}: trying again in {} minutes: {msg}", wait / 60));
+                self.update(&id, |j| {
+                    if j.status.running() {
+                        j.status = Status::Waiting;
+                        j.error = Some(format!("{msg} Trying again in {} minutes.", wait / 60));
+                        j.speed = 0;
+                        j.retries = tries;
+                    }
+                });
+                let q = self.clone();
+                let id2 = id.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(wait)).await;
+                    if q.get(&id2).map(|j| j.status == Status::Waiting && j.retries == tries) == Some(true) {
+                        q.update(&id2, |j| j.status = Status::Queued);
+                        q.poke();
+                    }
+                });
+            }
             Outcome::Retry(msg) | Outcome::Failed(msg) => {
+                crate::log::error(&format!("{id}: didn't work: {msg}"));
+                if let Some(j) = self.get(&id) {
+                    crate::activity::failed(&j.mod_name, &msg);
+                }
                 self.update(&id, |j| {
                     if j.status.running() {
                         j.status = Status::Failed;
@@ -735,8 +790,9 @@ impl Queue {
             let md5 = if verify { library::md5_of(&archive).ok() } else { None };
             if unpack && library::kind(&archive) != library::Kind::Other {
                 // A file that won't unpack is still kept; the library shows it as an archive.
-                if let Ok(name) = library::unpack(&archive) {
-                    library::set_unpacked(&dir, file.file_id, Some(name), !keep)?;
+                match library::unpack(&archive) {
+                    Ok(name) => library::set_unpacked(&dir, file.file_id, Some(name), !keep)?,
+                    Err(e) => crate::log::warn(&format!("Couldn't unpack {}: {e}", archive.display())),
                 }
             }
             Ok((dir, md5))
@@ -748,7 +804,11 @@ impl Queue {
                 // it unchecked.
                 if let Some(md5) = md5 {
                     if let Ok(found) = self.nexus.md5_search(&job.game, &md5).await {
-                        let _ = library::set_verified(&dir, file_id, found.contains(&(job.mod_id, file_id)));
+                        let ok = found.contains(&(job.mod_id, file_id));
+                        if !ok {
+                            crate::log::warn(&format!("{id}: the file doesn't match Nexus Mods' checksum ({md5})"));
+                        }
+                        let _ = library::set_verified(&dir, file_id, ok);
                     }
                 }
                 Outcome::Stored(dir)
@@ -761,7 +821,12 @@ impl Queue {
     /// Keep all downloads together under the speed limit: each piece books its share of time,
     /// and waits until that time has passed.
     async fn throttle(&self, n: u64) {
-        let rate = self.settings.lock().unwrap().speed_limit;
+        // "Pause while playing": hold every download where it is until the game closes (the
+        // connection may drop meanwhile; it carries on from where it was).
+        while self.settings.lock().unwrap().while_playing == "pause" && game_running() {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+        let rate = self.settings.lock().unwrap().limit_at(crate::log::hour_now());
         if rate == 0 {
             return;
         }
@@ -783,6 +848,9 @@ impl Queue {
         if size > 0 && have == size {
             return Ok(()); // Finished before the app closed, but not yet stored.
         }
+        // Nexus Mods sometimes gives a file's size only in whole kilobytes (rounded down), so
+        // `size` can be up to 1023 bytes short. The server's own length is exact; trust it.
+        let about = |n: u64| size > 0 && n >= size && n < size + 1024;
         let mut req = self.nexus.http().get(url);
         if have > 0 {
             req = req.header("Range", format!("bytes={have}-"));
@@ -792,6 +860,8 @@ impl Queue {
         let resumed = status == 206;
         match status {
             200 | 206 => {}
+            // Nothing more to send, and what's here is the listed size: it's all here.
+            416 if about(have) => return Ok(()),
             416 if have > 0 => {
                 // The server says there's nothing more to send; start over to be safe.
                 let _ = tokio::fs::remove_file(part).await;
@@ -801,7 +871,7 @@ impl Queue {
             s if s >= 500 => return Err(Outcome::Retry(format!("The download server had a problem ({s})."))),
             s => return Err(Outcome::Failed(format!("The download server answered with an error ({s})."))),
         }
-        let total = if size > 0 { size } else { res.content_length().map(|l| l + if resumed { have } else { 0 }).unwrap_or(0) };
+        let total = res.content_length().map(|l| l + if resumed { have } else { 0 }).unwrap_or(size);
         let mut f = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
@@ -814,7 +884,7 @@ impl Queue {
         self.update(id, |j| {
             j.status = Status::Downloading;
             j.received = received;
-            if j.size == 0 {
+            if total > 0 {
                 j.size = total;
             }
         });
@@ -915,7 +985,10 @@ mod tests {
                         }
                         ["v1", "games", "g", "mods", "1", "files", f] if f.ends_with(".json") => {
                             let id = f.trim_end_matches(".json");
-                            let _ = s.write_all(json(format!(r#"{{"file_id":{id},"name":"File {id}","file_name":"file{id}.bin","size_in_bytes":{SIZE},"category_name":"MAIN"}}"#)).as_bytes()).await;
+                            // Files 70 and up list their size only in whole kilobytes, rounded down, as
+                            // Nexus Mods sometimes does.
+                            let size = if id.parse::<u64>().unwrap_or(0) >= 70 { format!(r#""size_kb":{}"#, SIZE / 1024) } else { format!(r#""size_in_bytes":{SIZE}"#) };
+                            let _ = s.write_all(json(format!(r#"{{"file_id":{id},"name":"File {id}","file_name":"file{id}.bin",{size},"category_name":"MAIN"}}"#)).as_bytes()).await;
                         }
                         ["v1", "games", "g", "mods", "1", "files", f, "download_link.json"] => {
                             let _ = s.write_all(json(format!(r#"[{{"name":"Test","short_name":"T","URI":"{base}/dl/{f}"}}]"#)).as_bytes()).await;
@@ -1000,6 +1073,16 @@ mod tests {
         let data = std::fs::read(file).unwrap();
         assert_eq!(data.len(), SIZE);
         assert!(data.iter().enumerate().all(|(i, b)| *b == byte(i)));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_size_in_kilobytes_is_not_a_short_download() {
+        // The listed size is 200_000 / 1024 = 195 kB = 199_680 bytes; the file is 200_000.
+        let (q, _seen, dir, _) = setup(Mode::Sequential, 1).await;
+        q.add("g", 1, 70, None, None, None);
+        wait_until(&q, "done", all_done).await;
+        assert_eq!(q.list()[0].size, SIZE as u64);
+        assert_eq!(std::fs::read(dir.path().join("lib/g/1 - Test mod/file70.bin")).unwrap().len(), SIZE);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1089,9 +1172,15 @@ mod tests {
         assert!(saved.contains("\"paused\""));
         // The page never sees the key.
         assert!(q.list()[0].key.is_none());
-        let again = Queue::new(None, dir.path().to_path_buf(), settings, Nexus::new(None));
+        let again = Queue::new(None, dir.path().to_path_buf(), settings.clone(), Nexus::new(None));
         assert_eq!(again.list().len(), 1);
         assert_eq!(again.list()[0].status, Status::Paused);
+
+        // One waiting to try again when the app closed goes back in line (its timer is gone).
+        let file = dir.path().join("queue.json");
+        std::fs::write(&file, std::fs::read_to_string(&file).unwrap().replace("\"paused\"", "\"waiting\"")).unwrap();
+        let third = Queue::new(None, dir.path().to_path_buf(), settings, Nexus::new(None));
+        assert_eq!(third.list()[0].status, Status::Queued);
     }
 
     #[tokio::test(flavor = "multi_thread")]

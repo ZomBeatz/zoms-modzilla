@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-history"
+description = "Enables the profile_history command without any pre-configured scope."
+commands.allow = ["profile_history"]
+
+[[permission]]
+identifier = "deny-profile-history"
+description = "Denies the profile_history command without any pre-configured scope."
+commands.deny = ["profile_history"]

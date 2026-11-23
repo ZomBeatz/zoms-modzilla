@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-setting-reset"
+description = "Enables the profile_setting_reset command without any pre-configured scope."
+commands.allow = ["profile_setting_reset"]
+
+[[permission]]
+identifier = "deny-profile-setting-reset"
+description = "Denies the profile_setting_reset command without any pre-configured scope."
+commands.deny = ["profile_setting_reset"]

@@ -25,7 +25,8 @@ pub fn tray_library() -> Option<PathBuf> {
     dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| p.exists())
 }
 
-/// The distro family, from /etc/os-release: "arch", "debian", "fedora", "suse", or "other".
+/// The distro family, from /etc/os-release: "arch", "debian", "fedora", "suse", "immutable"
+/// (SteamOS, Bazzite and other read-only systems), or "other".
 pub fn family(os_release: &str) -> &'static str {
     let field = |k: &str| {
         os_release
@@ -36,7 +37,10 @@ pub fn family(os_release: &str) -> &'static str {
     };
     let words = format!("{} {}", field("ID"), field("ID_LIKE"));
     let has = |w: &str| words.split_whitespace().any(|x| x == w);
-    if has("arch") || has("cachyos") || has("manjaro") || has("endeavouros") {
+    // Read-only systems: packages can't be added with the package manager.
+    if has("steamos") || has("bazzite") || has("chimeraos") || words.contains("silverblue") || words.contains("kinoite") || has("bluefin") || has("aurora") {
+        "immutable"
+    } else if has("arch") || has("cachyos") || has("manjaro") || has("endeavouros") {
         "arch"
     } else if has("debian") || has("ubuntu") || has("linuxmint") || has("pop") {
         "debian"
@@ -153,6 +157,13 @@ pub fn check(tray: bool, links: bool, steam_libraries: usize, library: &Path) ->
             fix: fix("keyring", has_program("secret-tool")),
         },
     ];
+    let mut items = items;
+    if fam == "immutable" {
+        // On SteamOS and friends the system can't take packages: say what to do instead.
+        for i in items.iter_mut().filter(|i| !i.ok && i.what != "Library folder" && i.what != "Steam") {
+            i.detail.push_str(" This system is read-only (SteamOS, Bazzite…), so it can't be added with the package manager; it's optional.");
+        }
+    }
     Report { distro, items }
 }
 
@@ -172,9 +183,12 @@ mod tests {
     fn knows_distro_families() {
         assert_eq!(family("NAME=\"CachyOS Linux\"\nID=cachyos\nID_LIKE=arch\n"), "arch");
         assert_eq!(family("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"), "debian");
-        assert_eq!(family("ID=bazzite\nID_LIKE=\"fedora\"\n"), "fedora");
+        assert_eq!(family("ID=bazzite\nID_LIKE=\"fedora\"\n"), "immutable", "Bazzite is read-only");
+        assert_eq!(family("ID=nobara\nID_LIKE=\"fedora\"\n"), "fedora");
         assert_eq!(family("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"), "suse");
         assert_eq!(family("ID=nixos\n"), "other");
+        assert_eq!(family("ID=steamos\nID_LIKE=arch\n"), "immutable");
+        assert_eq!(install("immutable", "rar"), None);
         assert_eq!(install("debian", "rar").as_deref(), Some("sudo apt install libarchive-tools"));
         assert_eq!(install("other", "rar"), None);
     }

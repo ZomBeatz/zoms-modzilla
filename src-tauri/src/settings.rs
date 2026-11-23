@@ -33,6 +33,13 @@ pub struct AddedGame {
     /// How to start the game when it isn't a Steam game: a command, run in the install folder.
     #[serde(default)]
     pub launch: Option<String>,
+    /// Its Steam app number, when it was added from the Steam games found (for Play, art and
+    /// its Proton folder).
+    #[serde(default)]
+    pub steam_app_id: Option<u32>,
+    /// Where the game keeps its saves, when set by the person (for saves per profile).
+    #[serde(default)]
+    pub save_folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +68,37 @@ pub struct Settings {
     pub key_in_keyring: bool,
     /// Check each finished download against Nexus Mods' checksum (one request per file).
     pub verify_downloads: bool,
+    /// Mods marked adult on Nexus Mods: "show" them like any other, "blur" their pictures, or
+    /// "hide" them in Browse (and blur them elsewhere). The library always lists what's there.
+    pub adult_content: String,
+    /// Request saver: pages that would ask Nexus Mods by themselves (Browse) wait for a click.
+    pub request_saver: bool,
+    /// After the quick tries, keep trying a download that lost its connection later on (in 5
+    /// minutes, 30 minutes, then 2 hours) instead of marking it failed.
+    pub retry_later: bool,
+    /// Only start downloads between these hours (local time, 0 to 23). Equal means any time.
+    pub hours_from: u8,
+    pub hours_to: u8,
+    /// While a game is running: "carry" on, "hold" new downloads, or "pause" all of them.
+    pub while_playing: String,
+    /// A second speed limit for some hours of the day (bytes a second, 0 = off).
+    pub timed_limit: u64,
+    pub timed_from: u8,
+    pub timed_to: u8,
+    /// Open in the tray instead of a window when started.
+    pub start_hidden: bool,
+    /// Carry on with unfinished downloads when the app starts ("yes"), or keep them paused ("no").
+    pub resume_on_start: String,
+    /// Games whose mods are always copied in, never hard-linked (for tools that change files in
+    /// place, which would change the library's copy too).
+    pub copy_games: Vec<String>,
+    /// Games whose mods are kept under another folder than the library: game → folder (which
+    /// gets a `<game>` folder inside). Changed only by moving them (`library_move_game`).
+    pub game_libraries: std::collections::BTreeMap<String, String>,
+    /// Optional AI help: which service and model (the key is kept apart, in `ai-key`).
+    pub ai: Option<crate::ai::AiSettings>,
+    /// Activity kinds not to note ("played", "updates"...).
+    pub activity_off: Vec<String>,
     /// Which defaults this file was written with; missing means the first ones.
     #[serde(default)]
     pub version: u32,
@@ -84,7 +122,22 @@ impl Default for Settings {
             start_with_computer: false,
             key_in_keyring: false,
             verify_downloads: true,
+            adult_content: "blur".into(),
+            request_saver: false,
             games: vec![],
+            retry_later: true,
+            hours_from: 0,
+            hours_to: 0,
+            while_playing: "carry".into(),
+            timed_limit: 0,
+            timed_from: 0,
+            timed_to: 0,
+            start_hidden: false,
+            resume_on_start: "yes".into(),
+            activity_off: vec![],
+            copy_games: vec![],
+            game_libraries: Default::default(),
+            ai: None,
             version: VERSION,
         }
     }
@@ -101,10 +154,42 @@ fn default_library() -> PathBuf {
 impl Settings {
     pub fn clamp(mut self) -> Self {
         self.max_concurrent = self.max_concurrent.clamp(1, MAX_CONCURRENT);
+        if !matches!(self.adult_content.as_str(), "show" | "blur" | "hide") {
+            self.adult_content = "blur".into();
+        }
+        for h in [&mut self.hours_from, &mut self.hours_to, &mut self.timed_from, &mut self.timed_to] {
+            *h = (*h).min(23);
+        }
+        if !matches!(self.while_playing.as_str(), "carry" | "hold" | "pause") {
+            self.while_playing = "carry".into();
+        }
+        if !matches!(self.resume_on_start.as_str(), "yes" | "no") {
+            self.resume_on_start = "yes".into();
+        }
+        self.activity_off.truncate(20);
         if self.library_dir.trim().is_empty() {
             self.library_dir = default_library().to_string_lossy().into_owned();
         }
         self
+    }
+
+    /// Whether `hour` is inside from..to (wrapping past midnight). Equal ends mean always.
+    pub fn in_hours(hour: u8, from: u8, to: u8) -> bool {
+        from == to || if from < to { hour >= from && hour < to } else { hour >= from || hour < to }
+    }
+
+    /// Whether downloads may start at `hour` (local).
+    pub fn may_start(&self, hour: u8) -> bool {
+        Self::in_hours(hour, self.hours_from, self.hours_to)
+    }
+
+    /// The speed limit at `hour` (local): the timed one inside its hours, else the usual one.
+    pub fn limit_at(&self, hour: u8) -> u64 {
+        if self.timed_limit > 0 && self.timed_from != self.timed_to && Self::in_hours(hour, self.timed_from, self.timed_to) {
+            self.timed_limit
+        } else {
+            self.speed_limit
+        }
     }
 
     /// How many downloads may run at the same time.

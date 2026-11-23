@@ -42,8 +42,9 @@ pub const KNOWN: &[(&str, &str, u32)] = &[
     ("xcom2", "XCOM 2", 268500),
     ("citiesskylines", "Cities: Skylines", 255710),
     ("stalker2heartofchornobyl", "S.T.A.L.K.E.R. 2", 1643320),
-    ("masseffectlegendaryedition", "Mass Effect Legendary Edition", 1328670),
-    ("terraria", "Terraria", 105600),
+    // Not here: games whose mods go in through their own tool (Terraria's tModLoader, Mass
+    // Effect Legendary Edition's ME3Tweaks), since Zom's Nexus can't put their mods in place.
+    // They can still be added by hand, for downloading.
     ("helldivers2", "Helldivers 2", 553850),
     ("finalfantasy7rebirth", "Final Fantasy VII Rebirth", 2909400),
     ("clairobscurexpedition33", "Clair Obscur: Expedition 33", 1903340),
@@ -83,6 +84,31 @@ pub struct Game {
     pub total_space: Option<u64>,
     /// When Steam last updated the game (Unix time), from its appmanifest.
     pub last_updated: Option<u64>,
+    /// When its mods go in through the game's own tool instead of a folder: what to say.
+    pub mod_tool: Option<String>,
+    /// The library is on another drive, so mods are copied into this game, not linked.
+    pub mods_copied: bool,
+    /// Where the game keeps its saves (set by the person, or known), for saves per profile.
+    pub save_folder: Option<String>,
+    /// Steam keeps this game's saves in its cloud (so it puts saves back into an emptied
+    /// save folder, which defeats saves per profile).
+    pub steam_cloud: bool,
+    /// The Wine/Proton build it runs with, when known ("Proton 9.0-302", "GE-Proton9-20").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proton: Option<String>,
+}
+
+/// Whether Steam keeps this game's saves in its cloud: it has cloud files for it, and the
+/// game's own switch (Properties › General, kept in sharedconfig.vdf as cloudenabled "0") isn't
+/// off.
+pub fn steam_cloud(app_id: u32) -> bool {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return false };
+    let users: Vec<PathBuf> = steam_roots(&home).into_iter().flat_map(|r| fs::read_dir(r.join("userdata")).into_iter().flatten().flatten().map(|u| u.path())).collect();
+    users.iter().any(|u| {
+        let has_files = fs::read_to_string(u.join(app_id.to_string()).join("remotecache.vdf")).map(|t| t.contains("\"root\"")).unwrap_or(false);
+        let switched_off = fs::read_to_string(u.join("7/remote/sharedconfig.vdf")).ok().and_then(|t| crate::launchopts::app_value(&t, app_id, "cloudenabled")).as_deref() == Some("0");
+        has_files && !switched_off
+    })
 }
 
 /// A Steam library folder (one per drive Steam installs games on), and what's in it.
@@ -160,6 +186,46 @@ pub fn steam_library_dirs() -> Vec<PathBuf> {
     libs
 }
 
+/// A game Steam has installed (any game, not only ones Zom's Nexus knows).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SteamApp {
+    pub app_id: u32,
+    pub name: String,
+    pub path: String,
+}
+
+/// Everything Steam has installed, in every library folder (tools like Proton left out).
+pub fn steam_installed() -> Vec<SteamApp> {
+    let mut out = vec![];
+    for lib in steam_library_dirs() {
+        let Ok(rd) = fs::read_dir(lib.join("steamapps")) else { continue };
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            let Some(id) = n.strip_prefix("appmanifest_").and_then(|x| x.strip_suffix(".acf")).and_then(|x| x.parse::<u32>().ok()) else { continue };
+            let Ok(acf) = fs::read_to_string(e.path()) else { continue };
+            let (Some(name), Some(dir)) = (acf_value(&acf, "name"), install_dir(&acf)) else { continue };
+            let low = name.to_lowercase();
+            if low.starts_with("proton") || low.starts_with("steam linux runtime") || low.starts_with("steamworks") {
+                continue;
+            }
+            let path = lib.join("steamapps/common").join(dir);
+            if path.is_dir() {
+                out.push(SteamApp { app_id: id, name, path: path.to_string_lossy().into_owned() });
+            }
+        }
+    }
+    out.sort_by_key(|a| a.name.to_lowercase());
+    out
+}
+
+/// The Proton folder for a Steam game installed at `path` (…/steamapps/common/<game>).
+pub fn proton_prefix_for(path: &Path, app_id: u32) -> Option<PathBuf> {
+    let steamapps = path.parent()?.parent()?;
+    let pfx = steamapps.join("compatdata").join(app_id.to_string()).join("pfx");
+    pfx.is_dir().then_some(pfx)
+}
+
 /// The Steam library folders, with how many games each has and which are Nexus Mods games.
 pub fn steam_libraries() -> Vec<SteamLibrary> {
     steam_library_dirs()
@@ -207,6 +273,11 @@ pub fn steam_games() -> Vec<Game> {
                 free_space: None,
                 total_space: None,
                 last_updated: acf_value(&acf, "LastUpdated").and_then(|v| v.parse().ok()).filter(|&t: &u64| t > 0),
+                mod_tool: None,
+                mods_copied: false,
+                save_folder: None,
+                steam_cloud: false,
+                proton: None,
             });
         }
     }

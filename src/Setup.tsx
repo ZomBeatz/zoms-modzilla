@@ -7,15 +7,24 @@ import { api, type LinkStatus } from "./api";
 import type { Ctx } from "./App";
 
 const HIDDEN = "zoms-nexus:setup-hidden";
+/** Settings > Show Getting started sets this, to show it even when every step is done. */
+export const SHOW = "zoms-nexus:setup-show";
 
 export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersion }: Ctx) {
   const [hidden, setHidden] = useState(() => {
     try {
-      return localStorage.getItem(HIDDEN) === "1";
+      return localStorage.getItem(HIDDEN) === "1" && localStorage.getItem(SHOW) !== "1";
     } catch {
       return false;
     }
   });
+  const forced = (() => {
+    try {
+      return localStorage.getItem(SHOW) === "1";
+    } catch {
+      return false;
+    }
+  })();
   const [links, setLinks] = useState<LinkStatus | null>(null);
   const [hasMods, setHasMods] = useState(false);
   useEffect(() => {
@@ -67,11 +76,12 @@ export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersio
     },
   ];
   const left = steps.filter((s) => !s.done).length;
-  if (hidden || left === 0 || links === null) return null;
+  if (hidden || (left === 0 && !forced) || links === null) return null;
   const hide = () => {
     setHidden(true);
     try {
       localStorage.setItem(HIDDEN, "1");
+      localStorage.removeItem(SHOW);
     } catch {
       /* no storage */
     }
@@ -80,7 +90,7 @@ export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersio
   return (
     <div className="panel setup">
       <div className="row between">
-        <h3 style={{ margin: 0 }}>Getting started · {steps.length - left} of {steps.length} done</h3>
+        <h3 style={{ margin: 0 }}>{left === 0 ? "Getting started · all done" : `Getting started · ${steps.length - left} of ${steps.length} done`}</h3>
         <button className="icon-btn" aria-label="Hide getting started" title="Hide this (it's all in Settings too)" onClick={hide}>
           <X size={16} />
         </button>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mo2-look"
+description = "Enables the mo2_look command without any pre-configured scope."
+commands.allow = ["mo2_look"]
+
+[[permission]]
+identifier = "deny-mo2-look"
+description = "Denies the mo2_look command without any pre-configured scope."
+commands.deny = ["mo2_look"]

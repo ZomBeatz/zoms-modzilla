@@ -1,10 +1,19 @@
+import { SavesGate, requestPlay } from "./SavesGate";
+import { applyUi, deckOn } from "./deck";
+import { setGameRunning, setPadActions, startPad } from "./pad";
+import { PadHints } from "./PadHints";
+import { Palette } from "./Palette";
+import { wantProfile } from "./nav";
+import { GonePrompt } from "./pages/GoneGames";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Compass, Download, FolderOpen, Gamepad2, Layers, Settings as Cog } from "lucide-react";
-import { api, fileUrl, isDesktop, on, type Game, type Job, type Overview } from "./api";
+import { Bell, Compass, Download, FolderOpen, Gamepad2, Layers, Settings as Cog } from "lucide-react";
+import { api, type Profile, fileUrl, isDesktop, on, type DriveUse, type Game, type GameState, type Job, type Overview } from "./api";
+import { GameStatus, QuickPlay, showing } from "./GameStatus";
 import { GamePicker } from "./GamePicker";
 import { Setup } from "./Setup";
+import { Requests } from "./Requests";
 import { pendingUpdates, profileProgress, takeUpdate } from "./progress";
-import { ContextMenu, DiskBar, Toast, Wordmark, type MenuEntry, type MenuState, type ToastMsg } from "./ui";
+import { ContextMenu, DiskBar, SpaceBar, Toast, Wordmark, type MenuEntry, type MenuState, type ToastMsg } from "./ui";
 import { bytes, eta, speed } from "./format";
 import { Downloads } from "./pages/Downloads";
 import { Library } from "./pages/Library";
@@ -13,8 +22,9 @@ import { SettingsPage } from "./pages/Settings";
 import { AddDialog } from "./pages/AddDialog";
 import { Browse } from "./pages/Browse";
 import { Profiles } from "./pages/Profiles";
+import { Activity } from "./pages/Activity";
 
-export type Page = "downloads" | "library" | "browse" | "profiles" | "games" | "settings";
+export type Page = "downloads" | "library" | "browse" | "profiles" | "games" | "activity" | "settings";
 
 export interface Ctx {
   overview: Overview;
@@ -38,6 +48,8 @@ export interface Ctx {
   /** Walking through files that wait for a Mod manager download click, one page at a time. */
   guiding: boolean;
   guide: (on: boolean) => void;
+  /** Where each game is after Play (starting, running, …), by game. */
+  gameStates: Record<string, GameState>;
 }
 
 /** A free account's file that hasn't had its website click yet. */
@@ -49,21 +61,29 @@ const PAGES: { id: Page; label: string; icon: typeof Download }[] = [
   { id: "browse", label: "Browse", icon: Compass },
   { id: "profiles", label: "Profiles", icon: Layers },
   { id: "games", label: "Games", icon: Gamepad2 },
+  { id: "activity", label: "Activity", icon: Bell },
   { id: "settings", label: "Settings", icon: Cog },
 ];
 
 /** Put a finished download into its game's "new downloads" profile, with what it needs. */
-async function intoProfile(j: Job) {
+/** Gives the profiles whose last waited-for update just went in (checked again already). */
+async function intoProfile(j: Job): Promise<Profile[]> {
   const ps = await api.profiles().catch(() => []);
+  const finished: Profile[] = [];
   // Profiles waiting for this file as an update: it takes the old file's place.
   const waiting = pendingUpdates();
   for (const p of ps) {
     if (!(waiting[p.id] ?? []).some((u) => u.modId === j.modId && u.fileId === j.fileId)) continue;
     await api.saveProfile({ ...p, mods: p.mods.map((m) => (m.modId === j.modId ? { ...m, fileId: j.fileId } : m)) }).catch(() => {});
     takeUpdate(p.id, j.modId, j.fileId);
+    if (!pendingUpdates()[p.id]) {
+      // The fix is in: check the profile again, so Activity and the profile show what's left.
+      await api.checkProfile(p.id).catch(() => null);
+      finished.push(p);
+    }
   }
   const p = ps.find((x) => x.game === j.game && x.newDownloads);
-  if (!p || p.mods.some((m) => m.modId === j.modId && m.fileId === j.fileId)) return;
+  if (!p || p.mods.some((m) => m.modId === j.modId && m.fileId === j.fileId)) return finished;
   // A newer file of a mod already there replaces the old one, in its place.
   const at = p.mods.findIndex((m) => m.modId === j.modId);
   const mods = [...p.mods];
@@ -71,6 +91,7 @@ async function intoProfile(j: Job) {
   else mods.push({ modId: j.modId, fileId: j.fileId, enabled: true });
   await api.saveProfile({ ...p, mods }).catch(() => {});
   await api.resolveProfile(p.id).catch(() => {});
+  return finished;
 }
 
 function stored<T>(key: string, fallback: T): T {
@@ -110,6 +131,33 @@ export default function App({ first }: { first: Overview }) {
   const [recent, setRecent] = useState<string[]>(() => stored<string[]>("zoms-nexus:recent-games", []));
   const [games, setGames] = useState<Game[]>([]);
   const [libraryVersion, setLibraryVersion] = useState(0);
+  // While the account hasn't been checked yet, look every few seconds for the answer (reading
+  // the app's state, not asking Nexus Mods), in case its announcement came before the page
+  // was listening.
+  const waitingForUser = overview.hasKey && !overview.user;
+  useEffect(() => {
+    if (!waitingForUser) return;
+    const t = setInterval(() => void api.overview().then(setOverview, () => {}), 3000);
+    return () => clearInterval(t);
+  }, [waitingForUser]);
+  // Where each game is after Play.
+  const [gameStates, setGameStates] = useState<Record<string, GameState>>({});
+  // The controller belongs to the game while one is starting or running.
+  useEffect(() => {
+    setGameRunning(Object.values(gameStates).some((s) => ["starting", "running"].includes(s.state)));
+  }, [gameStates]);
+  useEffect(() => {
+    void api.gameStates().then((all) => setGameStates(Object.fromEntries(all.map((x) => [x.game, x]))), () => {});
+    const off = on<GameState>("game:state", (x) => setGameStates((all) => ({ ...all, [x.game]: x })));
+    return () => void off.then((f) => f());
+  }, []);
+  // Unread entries on the Activity page.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    void api.activity().then((a) => setUnread(a.filter((e) => !e.read).length), () => {});
+    const off = on<number>("activity:changed", setUnread);
+    return () => void off.then((f) => f());
+  }, []);
   const [guiding, setGuiding] = useState(false);
   const finished = useRef(new Set<string>());
   const [menuState, setMenu] = useState<MenuState | null>(null);
@@ -174,6 +222,13 @@ export default function App({ first }: { first: Overview }) {
     setGame(next);
   }, [games]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(reloadGames, [reloadGames]);
+  // Coming back to the window (from Steam, say): read the games again, in case a setting there
+  // changed. Only reads this computer.
+  useEffect(() => {
+    const back = () => reloadGames();
+    window.addEventListener("focus", back);
+    return () => window.removeEventListener("focus", back);
+  }, [reloadGames]);
   const go = useCallback((p: Page, g?: string) => {
     setPage(p);
     if (g !== undefined) setGame(g);
@@ -194,7 +249,16 @@ export default function App({ first }: { first: Overview }) {
         // A file just finished: into the profile that takes new downloads for its game (once).
         if (j.status === "done" && !finished.current.has(j.id)) {
           finished.current.add(j.id);
-          void intoProfile(j);
+          void intoProfile(j).then((done) => {
+            for (const p of done)
+              toast(`All the updates for “${p.name}” are in. Put the mods in the game and play to check they fixed it.`, {
+                label: "Open",
+                run: () => {
+                  wantProfile(p.id);
+                  go("profiles", p.game);
+                },
+              });
+          });
         }
         setJobs((all) => (all.some((x) => x.id === j.id) ? all.map((x) => (x.id === j.id ? j : x)) : all));
       }),
@@ -257,11 +321,43 @@ export default function App({ first }: { first: Overview }) {
     });
   }, [game, games]);
 
-  // N adds a mod, unless you're typing.
+  // Ctrl+K finds anything; N adds a mod, unless you're typing.
+  const [finding, setFinding] = useState(false);
+  // Steam Deck mode and the controller: LB/RB change page, Y plays, Menu finds anything.
+  const [deck, setDeck] = useState(false);
+  useEffect(() => {
+    const on = () => setDeck(deckOn());
+    window.addEventListener("zoms:ui", on);
+    void applyUi().then(on);
+    startPad();
+    return () => window.removeEventListener("zoms:ui", on);
+  }, []);
+  useEffect(() => {
+    setPadActions({
+      page: (delta) => {
+        const i = PAGES.findIndex((x) => x.id === page);
+        const next = PAGES[(i + delta + PAGES.length) % PAGES.length];
+        go(next.id);
+        setTimeout(() => document.querySelector<HTMLElement>(".nav-item.active")?.focus(), 50);
+      },
+      play: () => {
+        const b = document.querySelector<HTMLButtonElement>(".hero .btn.primary, .quick-play");
+        if (b && !b.disabled) b.click();
+        else toast("Nothing to play here: pick a game with a profile first.");
+      },
+      find: () => setFinding(true),
+    });
+    return () => setPadActions(null);
+  }, [page, go]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setFinding((f) => !f);
+        return;
+      }
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select, [contenteditable]") || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (typeof t?.closest !== "function" || t.closest("input, textarea, select, [contenteditable]") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setAdding("");
@@ -272,7 +368,7 @@ export default function App({ first }: { first: Overview }) {
   }, []);
 
   const active = jobs.filter((j) => !["done", "paused"].includes(j.status)).length;
-  const ctx: Ctx = { overview, setOverview, jobs, loaded, toast, go, game, setGame, games, reloadGames, openAdd: (a?: string) => setAdding(a ?? ""), libraryVersion, guiding, guide, menu };
+  const ctx: Ctx = { overview, setOverview, jobs, loaded, toast, go, game, setGame, games, reloadGames, openAdd: (a?: string) => setAdding(a ?? ""), libraryVersion, guiding, guide, menu, gameStates };
   const user = overview.user;
   const left = overview.limits;
 
@@ -280,28 +376,58 @@ export default function App({ first }: { first: Overview }) {
     <div className="app">
       <nav className="sidebar" aria-label="Main">
         <Wordmark />
-        <GamePicker games={games} game={game} recent={recent} onPick={setGame} onManage={() => go("games")} />
+        <GamePicker
+          games={games}
+          game={game}
+          recent={recent}
+          onPick={setGame}
+          onManage={() => go("games")}
+          onProfile={(p) => {
+            wantProfile(p.id);
+            go("profiles", p.game);
+          }}
+        />
         {PAGES.map(({ id, label, icon: Icon }) => (
           <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => go(id)} title={label}>
             <Icon size={16} />
             <span className="label">{label}</span>
             {id === "downloads" && active > 0 && <span className="pill accent label">{active}</span>}
+            {id === "activity" && unread > 0 && page !== "activity" && <span className="pill warn label">{unread}</span>}
           </button>
         ))}
         <div className="nav-gap" />
         <div className="side-foot">
+          <GameStatus
+            states={Object.values(gameStates)}
+            gameName={(d) => games.find((x) => x.domain === d)?.name ?? d}
+            onOpen={(x) => go(x.profile ? "profiles" : "games", x.game)}
+            onDismiss={(d) =>
+              setGameStates((all) => {
+                const next = { ...all };
+                delete next[d];
+                return next;
+              })
+            }
+          />
+          {!(game && gameStates[game] && showing(gameStates[game])) && (
+            <QuickPlay
+              game={games.find((g) => g.domain === game)}
+              onPlay={(id, name) => {
+                requestPlay(id, () => {
+                  toast(`Putting “${name}” in and starting the game…`);
+                  void api.play(id).then(() => reloadGames(), (e) => toast((e as Error).message));
+                });
+              }}
+            />
+          )}
           <DownloadStatus jobs={jobs} onOpen={() => go("downloads")} />
           {user ? (
             <>
               <span>
                 Signed in as <b>{user.name}</b> {user.isPremium ? <span className="pill accent">Premium</span> : <span className="pill">Free</span>}
               </span>
-              {left.hourlyRemaining != null && (
-                <span className="num" title={`Nexus Mods API requests left${left.dailyRemaining != null ? `; ${left.dailyRemaining.toLocaleString()} today` : ""}. Updated with every answer from Nexus Mods.`}>
-                  {left.hourlyRemaining.toLocaleString()} requests left this hour
-                </span>
-              )}
-              <DiskBar free={overview.freeSpace} total={overview.totalSpace} label="mods" />
+              <Requests limits={left} />
+              <Drives overview={overview} game={games.find((g) => g.domain === game)} libraryVersion={libraryVersion} />
             </>
           ) : overview.hasKey ? (
             <span>Checking your account…</span>
@@ -310,6 +436,7 @@ export default function App({ first }: { first: Overview }) {
           )}
         </div>
       </nav>
+      {deck && <PadHints />}
       <main className="main">
         {!isDesktop && (
           <div className="banner demo-banner">
@@ -342,11 +469,15 @@ export default function App({ first }: { first: Overview }) {
         {page === "browse" && <Browse {...ctx} />}
         {page === "profiles" && <Profiles {...ctx} />}
         {page === "games" && <Games {...ctx} />}
+        {page === "activity" && <Activity {...ctx} />}
         {page === "settings" && <SettingsPage {...ctx} />}
       </main>
       {adding !== false && <AddDialog {...ctx} initial={adding} onClose={() => setAdding(false)} />}
       <ContextMenu menu={menuState} onClose={closeMenu} />
       <Toast toast={toastMsg} onDone={() => setToast(null)} />
+      <GonePrompt toast={toast} />
+      <SavesGate games={games} toast={toast} jobs={jobs} />
+      {finding && <Palette games={games} go={go} setGame={setGame} openAdd={() => setAdding("")} onClose={() => setFinding(false)} />}
     </div>
   );
 }
@@ -399,4 +530,30 @@ function DownloadStatus({ jobs, onOpen }: { jobs: Job[]; onOpen: () => void }) {
       </span>
     </button>
   );
+}
+
+/** Free space where it matters for the picked game: the library's drive, and the game's own
+ * drive when it's a different one (mods are copied there instead of linked). */
+function Drives({ overview, game, libraryVersion }: { overview: Overview; game?: Game; libraryVersion: number }) {
+  // What fills each drive: measured by the app (it walks the library at most every two minutes).
+  // Read again every minute and when the window comes back, so space freed elsewhere (a game
+  // uninstalled in Steam, files deleted) shows up without restarting.
+  const [drives, setDrives] = useState<DriveUse[] | null>(null);
+  const domain = game?.domain;
+  useEffect(() => {
+    let live = true;
+    const read = () => void api.diskUsage(domain).then((d) => live && setDrives(d), () => live && setDrives(null));
+    const t = setTimeout(read, 600);
+    const every = setInterval(read, 60_000);
+    window.addEventListener("focus", read);
+    return () => {
+      live = false;
+      clearTimeout(t);
+      clearInterval(every);
+      window.removeEventListener("focus", read);
+    };
+  }, [domain, libraryVersion]);
+  if (drives?.length) return <>{drives.map((d) => <SpaceBar key={d.holds.join()} d={d} />)}</>;
+  const lib = { free: overview.freeSpace, total: overview.totalSpace };
+  return <DiskBar free={lib.free} total={lib.total} label="mods" />;
 }

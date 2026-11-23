@@ -83,6 +83,66 @@ pub struct Programs {
     pub count: usize,
 }
 
+/// A mod whose files sit inside an extra folder, so they'd land where the game won't look.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Misplaced {
+    pub mod_id: u64,
+    pub mod_name: String,
+    /// The extra folder ("Cool Mod v2").
+    pub extra: String,
+    /// Where its files land now, and where the game's own folders are ("Data/Cool Mod v2/textures" vs "Data/textures").
+    pub lands: String,
+    pub should: String,
+}
+
+/// Files that come with a mod only to be read by people.
+pub fn is_doc(name: &str) -> bool {
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    matches!(ext.as_str(), "txt" | "md" | "pdf" | "jpg" | "jpeg" | "png" | "gif" | "webp" | "url" | "html" | "htm" | "rtf" | "docx")
+}
+
+/// `rels` (where a mod's files land, relative to the game) all sit in one folder the game doesn't
+/// have, right inside `target`, and that folder holds a folder the game does have there.
+pub fn misplaced(rels: &[String], target: &str, game_root: &Path) -> Option<(String, String, String)> {
+    let t = target.trim_matches('/').to_lowercase();
+    let pre = if t.is_empty() { String::new() } else { format!("{t}/") };
+    let mut tops: HashSet<String> = HashSet::new();
+    let mut inner: HashSet<String> = HashSet::new();
+    for r in rels {
+        let low = r.to_lowercase();
+        let rest = low.strip_prefix(&pre)?;
+        match rest.split_once('/') {
+            Some((top, more)) => {
+                tops.insert(top.to_string());
+                if let Some((sub, _)) = more.split_once('/') {
+                    inner.insert(sub.to_string());
+                }
+            }
+            None if is_doc(rest) => {}
+            None => return None,
+        }
+    }
+    if tops.len() != 1 {
+        return None;
+    }
+    let top = tops.into_iter().next()?;
+    let dir = game_root.join(target);
+    let names: HashSet<(String, bool)> = fs::read_dir(&dir).ok()?.flatten().map(|e| (e.file_name().to_string_lossy().to_lowercase(), e.path().is_dir())).collect();
+    if names.iter().any(|(n, _)| *n == top) {
+        return None;
+    }
+    let hit = inner.iter().find(|i| names.contains(&((*i).clone(), true)))?;
+    // As written, not lowercased: the first file under the extra folder's matching one.
+    let depth = t.split('/').filter(|x| !x.is_empty()).count();
+    let want = format!("{pre}{top}/{hit}/");
+    let real = rels.iter().find(|r| r.to_lowercase().starts_with(&want)).map(|r| r.split('/').take(depth + 2).collect::<Vec<_>>())?;
+    let extra = real[depth].to_string();
+    let lands = real.join("/");
+    let should = real[..depth].iter().chain(std::iter::once(&real[depth + 1])).copied().collect::<Vec<_>>().join("/");
+    Some((extra, lands, should))
+}
+
 /// Programs and scripts a person (or the game) could run: worth knowing about in a mod.
 pub fn is_program(path: &str) -> bool {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
@@ -127,6 +187,31 @@ pub struct Report {
     pub installers: Vec<String>,
     pub files: usize,
     pub at: u64,
+    /// Mod loader DLLs the game's Steam launch options don't let run under Proton.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launch_fix: Option<crate::launchopts::LaunchFix>,
+    /// Mod loaders some mods need that aren't in the game or the profile.
+    #[serde(default)]
+    pub loaders_missing: Vec<crate::loaders::Missing>,
+    /// Mod loaders in the game or the profile.
+    #[serde(default)]
+    pub loaders: Vec<String>,
+    /// Mods whose files would land somewhere the game won't look (packed a folder too deep).
+    #[serde(default)]
+    pub misplaced: Vec<Misplaced>,
+    /// What the game's own logs said the last time it started with this profile.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_log: Option<crate::gamelogs::GameLog>,
+    /// This profile is in the game, but its files changed since (Play or Put mods in game
+    /// brings the game up to date).
+    pub out_of_date: bool,
+    /// The file each game file should be (the winning mod's), for telling whether the game is
+    /// up to date: lowercase relative path → (relative path as written, source file).
+    #[serde(skip)]
+    pub sources: HashMap<String, (String, std::path::PathBuf)>,
+    /// Who puts each file in the game (for tracing the game's logs back to mods).
+    #[serde(skip)]
+    pub owners: crate::gamelogs::Owners,
 }
 
 /// The masters a plugin names in its header (TES4 record, MAST sub-records).
@@ -193,7 +278,14 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
         }
         let mut code = false;
         let mut programs: Vec<String> = vec![];
-        for (rel, from) in deploy::entries(&dir, mod_folder) {
+        let entries = deploy::entries(&dir, mod_folder);
+        if let Some(root) = game_root.filter(|_| !dir.join(crate::fomod::MARK).is_file()) {
+            let rels: Vec<String> = entries.iter().map(|(r, _)| r.clone()).collect();
+            if let Some((extra, lands, should)) = misplaced(&rels, mod_folder, root) {
+                r.misplaced.push(Misplaced { mod_id: m.mod_id, mod_name: m.name.clone(), extra, lands, should });
+            }
+        }
+        for (rel, from) in entries {
             code |= runs_code(&rel);
             if is_program(&rel) {
                 programs.push(rel.clone());
@@ -203,6 +295,8 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
                 plugins.retain(|(n, _, _)| !n.eq_ignore_ascii_case(name));
                 plugins.push((name.to_string(), m.name.clone(), from.clone()));
             }
+            r.owners.insert(rel.to_lowercase(), (m.mod_id, m.name.clone()));
+            r.sources.insert(rel.to_lowercase(), (rel.clone(), from.clone()));
             let providers = by_file.entry(rel.to_lowercase()).or_default();
             providers.retain(|p| p != &m.name);
             providers.push(m.name.clone());
@@ -258,6 +352,23 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
 }
 
 /// Fill in `needs` and `compat` from what Nexus Mods says about the profile's mods.
+/// The author's note makes it a suggestion, not a must: "optional", "not required",
+/// "Recommended but not required" (but not "Required to claim … Recommended to use …").
+pub fn soft(notes: Option<&str>) -> bool {
+    let n = notes.unwrap_or("").to_lowercase();
+    // "MANDATORY" on its own is a must; "Optional - MANDATORY for LEO addon" isn't.
+    if n.contains("mandatory") && !n.contains("optional") {
+        return false;
+    }
+    let n = n.replace("not required", "optional").replace("not needed", "optional").replace("isn't required", "optional").replace("is not required", "optional");
+    n.contains("optional")
+        || n.contains("addon")
+        || n.contains("add-on")
+        || n.contains("for devs")
+        || n.contains("for developers")
+        || (n.contains("recommend") && !n.contains("requir") && !n.contains("need"))
+}
+
 pub fn add_requirements(r: &mut Report, profile: &Profile, library: &[StoredMod], facts: &HashMap<String, crate::requirements::Facts>, game_updated: Option<u64>) {
     use crate::requirements::lookup;
     r.requirements_checked = true;
@@ -291,9 +402,13 @@ pub fn add_requirements(r: &mut Report, profile: &Profile, library: &[StoredMod]
                 "switchedOff"
             } else if have.contains(&q.mod_id) {
                 "notInProfile"
+            } else if lookup(facts, &profile.game, q.mod_id).map(|x| x.status != "published") == Some(true) {
+                // Hidden or removed on Nexus Mods: it can't be downloaded any more.
+                "unavailable"
             } else {
                 "notDownloaded"
             };
+            let kind = if matches!(kind, "notDownloaded" | "notInProfile" | "switchedOff") && soft(q.notes.as_deref()) { "optional" } else { kind };
             add(Need { name: name_of(q.mod_id).filter(|_| q.mod_id != 0).unwrap_or_else(|| q.name.clone()), mod_id: q.mod_id, kind: kind.into(), url: q.url.clone(), notes: q.notes.clone(), needed_by: vec![owner.clone()] });
         }
         for d in &f.dlc {
@@ -309,8 +424,10 @@ pub fn add_requirements(r: &mut Report, profile: &Profile, library: &[StoredMod]
         "notInProfile" => 1,
         "switchedOff" => 2,
         "dlc" => 3,
-        "external" => 4,
-        _ => 5,
+        "unavailable" => 4,
+        "external" => 5,
+        "optional" => 7,
+        _ => 6,
     };
     needs.sort_by_key(|n| rank(&n.kind));
     r.needs = needs;
@@ -374,8 +491,10 @@ mod tests {
             summary: None,
             picture_url: None,
             local: false,
+            adult: false,
+            source: None,
             folder: folder.to_string_lossy().into_owned(),
-            files: vec![StoredFile { file_id: id, name: "Main".into(), file_name: "m.7z".into(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: Some("u".into()), uploaded: None, verified: None }],
+            files: vec![StoredFile { file_id: id, name: "Main".into(), file_name: "m.7z".into(), version: None, category: None, size: 1, downloaded_at: 0, archive: None, unpacked: Some("u".into()), uploaded: None, verified: None, installed: None, has_installer: false }],
         }
     }
 
@@ -394,11 +513,17 @@ mod tests {
             collection: None,
             manual_requirements: false,
             new_downloads: false,
+            own_saves: false,
+            base: None,
+            addons: vec![],
+            rules: vec![],
+            note: None,
+            ts_pack: None,
         };
         let mut r = check(&p, &mods, "Data", None, &HashSet::new());
         assert_eq!(r.code.len(), 1, "only the mod with a plugin runs code");
         let req = |id: u64, name: &str| Requirement { mod_id: id, name: name.into(), url: None, other_game: false, notes: None };
-        let fact = |id: u64, requires: Vec<Requirement>, updated: u64| Facts { mod_id: id, game: "skyrimspecialedition".into(), name: format!("Mod {id}"), status: "published".into(), updated_at: Some(updated), requires, dlc: vec![], fetched: 0 };
+        let fact = |id: u64, requires: Vec<Requirement>, updated: u64| Facts { mod_id: id, game: "skyrimspecialedition".into(), name: format!("Mod {id}"), status: "published".into(), updated_at: Some(updated), requires, dlc: vec![], adult: false, category: None, fetched: 0, v: 0 };
         let mut facts = HashMap::new();
         facts.insert("skyrimspecialedition:1".to_string(), fact(1, vec![req(3, "Mod 3"), req(4, "Address Library"), Requirement { url: Some("https://example.com".into()), ..req(0, "A tool") }], 300));
         facts.insert("skyrimspecialedition:2".to_string(), fact(2, vec![req(1, "Mod 1"), req(4, "Address Library")], 50));
@@ -409,6 +534,19 @@ mod tests {
         // Mod 1 runs code, its file is from before the game update, and the mod has a newer one.
         assert_eq!(r.compat.len(), 1);
         assert_eq!((r.compat[0].mod_id, r.compat[0].kind.as_str()), (1, "newerFile"));
+
+        // A requirement taken down on Nexus Mods can't be got; one the author calls optional isn't a must.
+        let mut gone = fact(5, vec![], 1);
+        gone.status = "hidden".into();
+        facts.insert("skyrimspecialedition:5".to_string(), gone);
+        facts.insert("skyrimspecialedition:2".to_string(), fact(2, vec![req(5, "Hidden Outfit"), Requirement { notes: Some("Recommended but not required.".into()), ..req(6, "Nice Extra") }], 50));
+        let mut r2 = check(&p, &mods, "Data", None, &HashSet::new());
+        add_requirements(&mut r2, &p, &mods, &facts, None);
+        let kinds: Vec<(&str, &str)> = r2.needs.iter().filter(|n| n.mod_id >= 5).map(|n| (n.name.as_str(), n.kind.as_str())).collect();
+        assert_eq!(kinds, vec![("Hidden Outfit", "unavailable"), ("Nice Extra", "optional")]);
+        assert!(soft(Some("optional")) && soft(Some("Recommended")) && !soft(Some("Required to claim crowd vehicles. Recommended to use the CET version.")) && !soft(Some("needs it")) && !soft(None));
+        assert!(soft(Some("ADDON: modded vehicle list")) && soft(Some("Optional - MANDATORY for LEO addon")) && soft(Some("FOR DEVS: (to view logs)")));
+        assert!(!soft(Some("MANDATORY")) && !soft(Some("Required for v3.xx")));
         assert!(runs_code("r6/scripts/thing.reds") && runs_code("bin/x64/plugins/x.asi") && !runs_code("archive/pc/mod/tex.archive"));
         assert!(is_program("tools/Setup.EXE") && is_program("install.sh") && !is_program("Data/a.esp"));
     }
@@ -434,7 +572,7 @@ mod tests {
             lib_mod(dir.path(), 2, &[("textures/sky.dds", b"2".to_vec()), ("textures/sun.dds", b"2".to_vec()), ("Base.esm", plugin(&["Skyrim.esm"]))]),
             lib_mod(dir.path(), 3, &[("Other.esp", plugin(&["Missing.esm"]))]),
         ];
-        let profile = Profile { id: "p".into(), name: "P".into(), game: "skyrimspecialedition".into(), mods: [1, 2, 3, 4].iter().map(|i| ProfileMod { mod_id: *i, file_id: *i, enabled: true }).collect(), collection: None, manual_requirements: false, new_downloads: false };
+        let profile = Profile { id: "p".into(), name: "P".into(), game: "skyrimspecialedition".into(), mods: [1, 2, 3, 4].iter().map(|i| ProfileMod { mod_id: *i, file_id: *i, enabled: true }).collect(), collection: None, manual_requirements: false, new_downloads: false, own_saves: false, base: None, addons: vec![], rules: vec![], note: None, ts_pack: None };
         let r = check(&profile, &mods, "Data", Some(&game), &HashSet::new());
         assert_eq!(r.conflicts, vec![Conflict { winner: "Mod 2".into(), losers: vec!["Mod 1".into()], files: 2, examples: vec!["data/textures/sky.dds".into(), "data/textures/sun.dds".into()] }]);
         assert_eq!(r.load_order, vec!["Patch.esp", "Base.esm", "Other.esp"]);
@@ -443,5 +581,21 @@ mod tests {
         assert!(r.plugins.contains(&PluginIssue { plugin: "Other.esp".into(), mod_name: "Mod 3".into(), master: "Missing.esm".into(), kind: "missing".into() }));
         assert_eq!(r.missing, vec!["Mod 4"]);
         assert_eq!(r.plugins.len() + r.missing.len(), 3);
+    }
+}
+
+#[cfg(test)]
+mod placed_tests {
+    use super::*;
+
+    #[test]
+    fn notices_a_mod_packed_a_folder_too_deep() {
+        let game = tempfile::tempdir().unwrap();
+        fs::create_dir_all(game.path().join("Data/textures")).unwrap();
+        let r = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let m = misplaced(&r(&["Data/Cool Mod v2/textures/a.dds", "Data/readme.txt"]), "Data", game.path()).unwrap();
+        assert_eq!(m, ("Cool Mod v2".into(), "Data/Cool Mod v2/textures".into(), "Data/textures".into()));
+        assert!(misplaced(&r(&["Data/textures/a.dds"]), "Data", game.path()).is_none(), "right where it belongs");
+        assert!(misplaced(&r(&["Data/NewThing/b.cfg"]), "Data", game.path()).is_none(), "a new folder of its own");
     }
 }

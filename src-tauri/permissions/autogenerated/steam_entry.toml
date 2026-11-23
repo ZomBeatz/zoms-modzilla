@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-steam-entry"
+description = "Enables the steam_entry command without any pre-configured scope."
+commands.allow = ["steam_entry"]
+
+[[permission]]
+identifier = "deny-steam-entry"
+description = "Denies the steam_entry command without any pre-configured scope."
+commands.deny = ["steam_entry"]

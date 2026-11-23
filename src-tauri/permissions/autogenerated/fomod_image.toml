@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fomod-image"
+description = "Enables the fomod_image command without any pre-configured scope."
+commands.allow = ["fomod_image"]
+
+[[permission]]
+identifier = "deny-fomod-image"
+description = "Denies the fomod_image command without any pre-configured scope."
+commands.deny = ["fomod_image"]

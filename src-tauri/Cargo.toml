@@ -17,6 +17,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.13", features = ["stream", "json", "query"] }
@@ -24,10 +25,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util
 futures-util = "0.3"
 url = "2"
 zip = { version = "8", default-features = false, features = ["deflate", "deflate64", "bzip2", "lzma", "zstd"] }
-sevenz-rust2 = "0.25"
+sevenz-rust2 = { version = "0.25", features = ["deflate", "zstd", "brotli", "lz4"] }
+roxmltree = "0.20"
 base64 = "0.22"
 libc = "0.2"
 md-5 = "0.10"
+flate2 = "1"
+gilrs = "0.11"
 
 [dev-dependencies]
 tempfile = "3"

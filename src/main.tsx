@@ -1,9 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { api } from "./api";
+import { api, logPageErrors } from "./api";
 import "./tokens.css";
 import "./styles.css";
+
+logPageErrors();
 
 async function start() {
   const first = await api.overview();

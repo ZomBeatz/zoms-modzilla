@@ -2,7 +2,7 @@
 // Downloads are pretend, but they follow the same rules as the real queue (one at a time, or
 // several at once up to the limit), so the demo shows how the modes behave.
 
-import type { CheckReport, FileInfo, Game, Job, LinkStatus, ModInfo, Overview, Profile, Settings, StoredMod } from "./api";
+import type { FomodChoice, CheckReport, FileInfo, Game, Job, LinkStatus, ModInfo, Overview, Profile, Settings, StoredMod } from "./api";
 
 const listeners = new Map<string, Set<(p: unknown) => void>>();
 const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach((h) => h(payload));
@@ -158,7 +158,7 @@ function farmer(w: number, ht: number) {
 
 /** A night city: dark sky, glowing windows, neon bands. */
 function city(w: number, ht: number, _h: number) {
-  let out = `<rect width="${w}" height="${ht}" fill="#fdf500"/><rect y="${ht * 0.3}" width="${w}" height="${ht * 0.04}" fill="#19f2ff" opacity=".8"/><rect x="${w * 0.08}" y="${ht * 0.36}" width="${w * 0.5}" height="${ht * 0.015}" fill="#ff2a6d"/>`;
+  let out = `<defs><linearGradient id="cSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1a3c"/><stop offset="1" stop-color="#3a1458"/></linearGradient></defs><rect width="${w}" height="${ht}" fill="url(#cSky)"/><rect y="${ht * 0.3}" width="${w}" height="${ht * 0.04}" fill="#19f2ff" opacity=".8"/><rect x="${w * 0.08}" y="${ht * 0.36}" width="${w * 0.5}" height="${ht * 0.015}" fill="#ff2a6d"/>`;
   let x = 0;
   for (let i = 0; x < w; i++) {
     const bw = 40 + ((i * 37) % 70);
@@ -202,6 +202,8 @@ let settings: Settings = {
   keepArchives: true,
   autoRetry: true,
   verifyDownloads: true,
+  adultContent: "blur",
+  requestSaver: false,
   speedLimit: 0,
   games: [{ domain: "stardudevalley", name: "Stardude Valley", path: "/home/alex/Games/stardude" }],
 };
@@ -210,7 +212,7 @@ let linksOurs = false;
 
 const games: Game[] = [
   { domain: "cyberhunk2088", name: "Cyberhunk 2088", path: "/home/alex/.local/share/Steam/steamapps/common/Cyberhunk 2088", source: "steam", steamAppId: 9900001, protonPrefix: "/home/alex/.local/share/Steam/steamapps/compatdata/9900001/pfx", modFolder: "", freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
-  { domain: "frostrim", name: "Frostrim: The Elder Moods", path: "/mnt/games/SteamLibrary/steamapps/common/Frostrim: The Elder Moods", source: "steam", steamAppId: 9900002, protonPrefix: "/mnt/games/SteamLibrary/steamapps/compatdata/9900002/pfx", modFolder: "Data", activeProfile: "Winter evenings", freeSpace: 911_000_000_000, totalSpace: 2_000_000_000_000 },
+  { domain: "frostrim", name: "Frostrim: The Elder Moods", path: "/mnt/games/SteamLibrary/steamapps/common/Frostrim: The Elder Moods", source: "steam", steamAppId: 9900002, protonPrefix: "/mnt/games/SteamLibrary/steamapps/compatdata/9900002/pfx", modFolder: "Data", activeProfile: "Winter evenings", saveFolder: "/mnt/games/SteamLibrary/steamapps/compatdata/9900002/pfx/drive_c/users/steamuser/Documents/My Games/Frostrim/Saves", freeSpace: 911_000_000_000, totalSpace: 2_000_000_000_000 },
   { domain: "stardudevalley", name: "Stardude Valley", path: "/home/alex/Games/stardude", source: "added", modFolder: "Mods", launch: "./StardudeLoader", freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
 ];
 
@@ -263,7 +265,7 @@ function stored(c: (typeof catalog)[number], idx: number[], daysAgo: number): St
     folder,
     files: idx.map((i) => {
       const f = c.files[i];
-      return { fileId: f.fileId, name: f.name, fileName: f.fileName, version: f.version, category: f.category, size: f.size, downloadedAt: now() - daysAgo * 86400, archive: f.fileName, unpacked: settings.extract ? f.fileName.replace(/\.7z$/, "") : null };
+      return { fileId: f.fileId, name: f.name, fileName: f.fileName, version: f.version, category: f.category, size: f.size, downloadedAt: now() - daysAgo * 86400, archive: f.fileName, unpacked: settings.extract ? f.fileName.replace(/\.7z$/, "") : null, hasInstaller: c.mod.modId === 9002 };
     }),
   };
 }
@@ -365,10 +367,136 @@ function lookup(address: string) {
 
 const notes: Record<string, string> = { "frostrim:9002": "Keep below Lanterns of the North, or the snow sounds come back." };
 
+/** Made-up Activity entries. */
+const activity: { id: number; at: number; kind: string; title: string; detail?: string; game?: string; page?: string; profile?: string; read: boolean }[] = [
+  { id: 5, at: now() - 20 * 60, kind: "failed", title: "2 downloads didn't finish", detail: "Try them again on the Downloads page: Neon Rain Overhaul, Better Hoverbikes.", page: "downloads", read: false },
+  { id: 4, at: now() - 3 * 3600, kind: "worse", title: "“Winter evenings” has 2 problems to fix", detail: "Its check found 1 more than before. Open it to see them, or use Fix for me.", game: "frostrim", page: "profiles", profile: "p1", read: false },
+  { id: 3, at: now() - 26 * 3600 + 5400, kind: "played", title: "Played Frostrim: The Elder Moods for 1 h 30 min", detail: "With the profile “Winter evenings”.", game: "frostrim", page: "profiles", profile: "p1", read: true },
+  { id: 2, at: now() - 2 * 86400, kind: "updates", title: "1 mod has an update", detail: "Quiet Footsteps.", page: "library", read: true },
+  { id: 1, at: now() - 4 * 86400, kind: "gone", title: "“Old Lantern Pack” is gone from Nexus Mods", detail: "Nexus Mods marks it hidden. Your copy still works, but it won't get fixes.", game: "frostrim", page: "library", read: true },
+];
+
 let profiles: Profile[] = [
   { id: "p1", name: "Winter evenings", game: "frostrim", mods: [9001, 9002, 9003].map((m) => ({ modId: m, fileId: m * 10, enabled: true })) },
   { id: "p2", name: "Farm life", game: "stardudevalley", mods: [{ modId: 9101, fileId: 91010, enabled: true }] },
+  {
+    id: "p3",
+    name: "Snowy North (revision 4)",
+    game: "frostrim",
+    collection: "snowy1",
+    // The collection has 9001 and 9003; Quiet Footsteps (9002) is an add-on, 9003 is switched off by you.
+    mods: [
+      { modId: 9001, fileId: 90010, enabled: true },
+      { modId: 9002, fileId: 90020, enabled: true },
+      { modId: 9003, fileId: 90030, enabled: false },
+    ],
+    base: { slug: "snowy1", revision: 4, name: "Snowy North", files: [{ modId: 9001, fileId: 90010 }, { modId: 9003, fileId: 90030 }] },
+    addons: [{ id: "a1", name: "Quieter nights", enabled: true, added: [{ modId: 9002, fileId: 90020, enabled: true, after: 9001 }], off: [], files: [] }],
+  },
 ];
+
+type DemoAddon = { id: string; name: string; enabled: boolean; added: { modId: number; fileId: number; enabled: boolean; after?: number | null }[]; off: number[]; files: { modId: number; fileId: number }[] };
+/** How a demo profile differs from its collection, less what its switched-on add-ons do. */
+function demoYours(p: Profile): DemoAddon {
+  const base = p.base!;
+  const inBase = new Map(base.files.map((f) => [f.modId, f.fileId]));
+  const y: DemoAddon = { id: "yours", name: "Your changes", enabled: true, added: [], off: [], files: [] };
+  p.mods.forEach((m, i) => {
+    const f = inBase.get(m.modId);
+    if (f === undefined) y.added.push({ ...m, after: p.mods[i - 1]?.modId ?? null });
+    else {
+      if (f !== m.fileId) y.files.push({ modId: m.modId, fileId: m.fileId });
+      if (!m.enabled) y.off.push(m.modId);
+    }
+  });
+  base.files.filter((f) => !p.mods.some((m) => m.modId === f.modId)).forEach((f) => y.off.push(f.modId));
+  for (const a of ((p.addons ?? []) as DemoAddon[]).filter((a) => a.enabled)) {
+    y.added = y.added.filter((m) => !a.added.some((x) => x.modId === m.modId));
+    y.off = y.off.filter((id) => !a.off.includes(id));
+    y.files = y.files.filter((f) => !a.files.some((x) => x.modId === f.modId && x.fileId === f.fileId));
+  }
+  return y;
+}
+const view = (a: DemoAddon) => ({ id: a.id, name: a.name, enabled: a.enabled, added: a.added.map((m) => m.modId), off: a.off, files: a.files.map((f) => f.modId) });
+function demoLayers(p: Profile) {
+  if (!p.base) return { base: null, collection: p.collection ?? null, revision: null, addons: [], yours: null, names: {} };
+  const names = Object.fromEntries(catalog.map((c) => [c.mod.modId, c.mod.name]));
+  return { base: { slug: p.base.slug, revision: p.base.revision, name: p.base.name, count: p.base.files.length }, collection: p.collection, revision: p.base.revision, addons: ((p.addons ?? []) as DemoAddon[]).map(view), yours: view(demoYours(p)), names };
+}
+let demoSteamAdded = false;
+let demoAi: { provider: string; model: string; baseUrl?: string } | null = null;
+
+// A made-up tModLoader with Workshop mods.
+const demoTml = {
+  modsDir: "/home/alex/.local/share/Terraria/tModLoader/Mods",
+  mods: [
+    { name: "StarforgeExpansion", label: "Starforge Expansion", workshopId: 101, enabled: true, size: 48_000_000 },
+    { name: "BottomlessChest", label: "Bottomless Chest", workshopId: 102, enabled: true, size: 900_000 },
+    { name: "QuietBosses", label: "Quiet Bosses", workshopId: 103, enabled: false, size: 2_100_000 },
+    { name: "TinyHelpers", label: "Tiny Helpers", workshopId: null, enabled: false, size: 300_000 },
+  ],
+  packs: [{ name: "Boss rush", mods: ["StarforgeExpansion", "QuietBosses"] }],
+  missing: [] as string[],
+};
+
+// Made-up Thunderstore mods for the demo's Stardude Valley.
+const DEMO_TS = [
+  { fullName: "Pebble-BepInExPack", owner: "Pebble", name: "BepInExPack", description: "The mod loader, set up for Stardude Valley.", icon: "", version: "5.4.2100", downloads: 912_000, rating: 320, size: 2_400_000, url: "https://thunderstore.io/", deprecated: false, nsfw: false, modpack: false, categories: ["Libraries"], updated: "2026-11-02T10:00:00Z", needs: 0 },
+  { fullName: "Mossy-Lantern_Paths", owner: "Mossy", name: "Lantern_Paths", description: "Lanterns light up the paths you walk most at night.", icon: "", version: "1.3.0", downloads: 48_200, rating: 210, size: 860_000, url: "https://thunderstore.io/", deprecated: false, nsfw: false, modpack: false, categories: ["Mods"], updated: "2026-11-18T10:00:00Z", needs: 1 },
+  { fullName: "Mossy-Cozy_Farm_Pack", owner: "Mossy", name: "Cozy_Farm_Pack", description: "Twelve gentle mods for a slower farm life, picked to work together.", icon: "", version: "2.0.1", downloads: 15_900, rating: 95, size: 4_000, url: "https://thunderstore.io/", deprecated: false, nsfw: false, modpack: true, categories: ["Modpacks"], updated: "2026-11-20T10:00:00Z", needs: 12 },
+  { fullName: "Quill-Bigger_Backpack", owner: "Quill", name: "Bigger_Backpack", description: "Forty more slots, and a sort button.", icon: "", version: "0.9.4", downloads: 133_000, rating: 400, size: 120_000, url: "https://thunderstore.io/", deprecated: false, nsfw: false, modpack: false, categories: ["Mods"], updated: "2026-10-11T10:00:00Z", needs: 1 },
+];
+
+// Made-up settings files for the demo's mods, and what each profile changed.
+const DEMO_SETTINGS = [
+  { path: "Data/SKSE/Plugins/QuietFootsteps.ini", modId: 9002, modName: "Quiet Footsteps", text: "[General]\n; How loud footsteps are, 0 to 100\nVolume = 40\nSnowOnly = false\n" },
+  { path: "Data/SKSE/Plugins/PineForest.json", modId: 9003, modName: "Pine Forest Textures", text: '{\n  "quality": "2K",\n  "snowOnBranches": true\n}\n' },
+];
+const demoSettings: Record<string, Record<string, string>> = {};
+const demoChecks: Record<string, CheckReport> = {};
+/** The demo pretends Dungeon Delvers was uninstalled with mods left (?gone in the address). */
+let demoGone = typeof location !== "undefined" && new URLSearchParams(location.search).has("gone");
+const demoTags: Record<string, string[]> = { "frostrim:9002": ["sound"], "frostrim:9001": ["lighting", "must have"] };
+const demoHistory = [
+  { at: now() - 26 * 3600, game: "frostrim", profileId: "p1", profileName: "Winter evenings", mods: [9001, 9002, 9003].map((m) => ({ modId: m, fileId: m * 10, enabled: true })) },
+  { at: now() - 5 * 86400, game: "frostrim", profileId: "p1", profileName: "Winter evenings", mods: [9001, 9003].map((m) => ({ modId: m, fileId: m * 10, enabled: true })) },
+];
+/** A made-up installer for Quiet Footsteps. */
+const demoInstaller = {
+  name: "Quiet Footsteps",
+  image: null,
+  steps: [
+    {
+      name: "Footsteps",
+      groups: [
+        {
+          name: "How quiet",
+          kind: "SelectExactlyOne",
+          plugins: [
+            { name: "A little quieter", description: "Footsteps at 70% of the game's own volume.", flags: [["level", "light"]], kind: "Optional", patterns: [] },
+            { name: "Much quieter", description: "Footsteps at 40%. Sneaking sounds stay as they are.", flags: [["level", "strong"]], kind: "Recommended", patterns: [] },
+            { name: "Silent", description: "No footstep sounds at all. Not for playing with others.", flags: [["level", "silent"]], kind: "Optional", patterns: [] },
+          ],
+        },
+      ],
+    },
+    {
+      name: "Extras",
+      visible: { any: [{ flag: "level", value: "light" }, { flag: "level", value: "strong" }] },
+      groups: [
+        {
+          name: "Surfaces",
+          kind: "SelectAny",
+          plugins: [
+            { name: "Snow crunch", description: "Keeps the crunch on snow louder than on stone.", flags: [], kind: "Optional", patterns: [] },
+            { name: "Wooden floors", description: "Softer steps indoors on wood.", flags: [], kind: "Optional", patterns: [] },
+          ],
+        },
+      ],
+    },
+  ],
+};
+let demoIgnored: string[] = [];
 
 const demoCheck: CheckReport = {
   conflicts: [{ winner: "Pine Forest Textures", losers: ["Lanterns of the North"], files: 3, examples: ["data/textures/landscape/trees/pine01.dds", "data/textures/landscape/trees/pine02.dds", "data/textures/landscape/snow.dds"] }],
@@ -481,6 +609,9 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
         updatedAt: now() - 30 * 86400,
         requires: id === 9003 ? [{ modId: 9001, name: "Lanterns of the North", otherGame: false, notes: "Min version 1.2" }, { modId: 9004, name: "Snowy Roads", otherGame: false, notes: null }, { modId: 0, name: "A shader tool", url: "https://example.com/shader-tool", otherGame: false, notes: "Version 2 or newer" }] : [],
         dlc: [],
+        // Made-up tags, so the Show filters have something to sort.
+        adult: id === 9002,
+        category: ({ 9001: "Lighting", 9002: "Audio", 9003: "Environment", 9004: "Environment" } as Record<number, string>)[id] ?? "Gameplay",
       }));
     case "queue_requirements":
       return { queued: (a.modIds as number[]).map((id) => (id === 9004 ? "Snowy Roads" : `Mod ${id}`)), skipped: [] };
@@ -523,6 +654,27 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     case "library_remove_mod":
       library = library.filter((m) => m.modId !== a.modId);
       return;
+    case "activity_list":
+      return structuredClone(activity);
+    case "activity_mark":
+      if (a.clear) activity.length = 0;
+      else activity.forEach((e) => (e.read = true));
+      return null;
+    case "saves_copies":
+      return 0;
+    case "saves_move_copies":
+      return 0;
+    case "game_states":
+      return [];
+    case "profile_play_times":
+      return { p1: { seconds: 14 * 3600 + 25 * 60, sessions: 9, lastPlayed: now() - 26 * 3600 }, p2: { seconds: 50 * 60, sessions: 1, lastPlayed: now() - 6 * 86400 } };
+    case "disk_usage":
+      return a.game === "frostrim"
+        ? [
+            { holds: ["mods"], total: 1_000_000_000_000, free: 412_000_000_000, mods: 38_000_000_000, archives: 21_000_000_000, steam: 310_000_000_000 },
+            { holds: ["Frostrim: The Elder Moods"], total: 2_000_000_000_000, free: 911_000_000_000, mods: 0, archives: 0, steam: 870_000_000_000 },
+          ]
+        : [{ holds: a.game ? ["mods", ({ cyberhunk2088: "Cyberhunk 2088", stardudevalley: "Stardude Valley" } as Record<string, string>)[String(a.game)] ?? String(a.game)] : ["mods"], total: 1_000_000_000_000, free: 412_000_000_000, mods: 38_000_000_000, archives: 21_000_000_000, steam: 310_000_000_000 }];
     case "library_usage":
       return library.flatMap((m) => m.files.map((f) => ({ game: m.game, modId: m.modId, fileId: f.fileId, archive: f.archive ? f.size : 0, unpacked: f.unpacked ? Math.round(f.size * 1.6) : 0 })));
     case "library_drop_archive": {
@@ -548,6 +700,21 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       return;
     case "games_list":
       return structuredClone(games);
+    case "game_catalog":
+      return {
+        games: [
+          { domain: "cyberhunk2088", name: "Cyberhunk 2088", mods: 18400 },
+          { domain: "frostrim", name: "Frostrim: The Elder Moods", mods: 102300 },
+          { domain: "stardudevalley", name: "Stardude Valley", mods: 21900 },
+          { domain: "dungeondelvers", name: "Dungeon Delvers", mods: 2310 },
+          { domain: "skyharbor", name: "Sky Harbor Tycoon", mods: 480 },
+          { domain: "mechmayhem", name: "Mech Mayhem", mods: 95 },
+        ],
+        installed: [
+          { appId: 9900007, name: "Dungeon Delvers", path: "/mnt/games/SteamLibrary/steamapps/common/Dungeon Delvers" },
+          { appId: 9900008, name: "Puzzle Pond", path: "/mnt/games/SteamLibrary/steamapps/common/Puzzle Pond" },
+        ],
+      };
     case "steam_libraries":
       return [
         { path: "/home/alex/.local/share/Steam", installed: 6, nexusGames: ["Cyberhunk 2088"], freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
@@ -556,7 +723,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     case "games_add": {
       const domain = String(a.domain).toLowerCase();
       if (!/^[\w-]+$/.test(domain)) throw new Error("Type the game's name as it's written in its Nexus Mods address, like frostrim.");
-      games.push({ domain, name: String(a.name || domain), path: (a.path as string) || null, source: "added" });
+      games.push({ domain, name: String(a.name || domain), path: (a.path as string) || null, source: "added", steamAppId: (a.steamAppId as number) ?? null, modFolder: (a.modFolder as string | null) ?? null });
       return;
     }
     case "games_remove": {
@@ -632,16 +799,272 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       const p = { ...(a.profile as Profile) };
       if (!p.name.trim()) throw new Error("Give the profile a name.");
       if (!p.id) p.id = `p${Date.now()}`;
-      profiles = [...profiles.filter((x) => x.id !== p.id), p];
+      const was = profiles.find((x) => x.id === p.id);
+      if (was) {
+        p.base = was.base;
+        p.addons = was.addons;
+      }
+      // Load order rules, as the app keeps them: move a mod down to just after the one it follows.
+      for (let n = 0; n <= (p.rules ?? []).length; n++)
+        for (const r of p.rules ?? []) {
+          const i = p.mods.findIndex((m) => m.modId === r.modId);
+          const j = p.mods.findIndex((m) => m.modId === r.after);
+          if (i >= 0 && j >= 0 && i < j) {
+            p.mods = [...p.mods];
+            const [m] = p.mods.splice(i, 1);
+            p.mods.splice(j, 0, m);
+          }
+        }
+      profiles = was ? profiles.map((x) => (x.id === p.id ? p : x)) : [...profiles, p];
       return p;
     }
+    case "profiles_order": {
+      const ids = a.ids as string[];
+      const at = (id: string) => (ids.indexOf(id) < 0 ? 1e9 : ids.indexOf(id));
+      profiles = [...profiles].sort((x, y) => at(x.id) - at(y.id));
+      return structuredClone(profiles);
+    }
+    case "profile_layers":
+    case "profile_collection_link": {
+      const p = profiles.find((p) => p.id === a.id)!;
+      return demoLayers(p);
+    }
+    case "profile_collection_update": {
+      const p = profiles.find((p) => p.id === a.id)!;
+      if (!p.base) throw new Error("Find your changes first, so they're kept when the collection moves on.");
+      const changes = { added: [], removed: [], updated: [9001], kept: [], joined: [] };
+      const names = { 9001: "Lanterns of the North" };
+      if (!a.apply) return { from: p.base.revision, to: 5, changes, names, queued: 0, profile: null };
+      p.base = { ...p.base, revision: 5 };
+      p.name = p.name.replace(/\(revision \d+\)$/, "(revision 5)");
+      return { from: 4, to: 5, changes, names, queued: 1, profile: structuredClone(p) };
+    }
+    case "profile_addon_save": {
+      const p = profiles.find((p) => p.id === a.id)!;
+      const y = demoYours(p);
+      if (!y.added.length && !y.off.length && !y.files.length) throw new Error("There are no changes of yours to make an add-on from.");
+      p.addons = [...(p.addons ?? []), { ...y, id: `a${Date.now()}`, name: String(a.name).trim() || "My add-on" }];
+      return structuredClone(p);
+    }
+    case "profile_addon_set": {
+      const p = profiles.find((p) => p.id === a.id)!;
+      const list = (p.addons ?? []) as DemoAddon[];
+      const ad = list.find((x) => x.id === a.addon)!;
+      if (a.name) ad.name = String(a.name);
+      const want = a.remove ? false : ((a.enabled as boolean | null) ?? ad.enabled);
+      if (want !== ad.enabled) {
+        if (want) {
+          ad.off.forEach((id) => p.mods.forEach((m) => m.modId === id && (m.enabled = false)));
+          ad.added.forEach((m) => p.mods.some((x) => x.modId === m.modId) || p.mods.push({ modId: m.modId, fileId: m.fileId, enabled: m.enabled }));
+        } else {
+          p.mods = p.mods.filter((m) => !ad.added.some((x) => x.modId === m.modId));
+          ad.off.forEach((id) => p.mods.forEach((m) => m.modId === id && (m.enabled = true)));
+        }
+        ad.enabled = want;
+      }
+      if (a.remove) p.addons = list.filter((x) => x !== ad);
+      return structuredClone(p);
+    }
+    case "mod_tags":
+      return { ...demoTags };
+    case "set_mod_tags": {
+      const k = `${a.game}:${a.modId}`;
+      const t = (a.tags as string[]).map((x) => x.trim()).filter(Boolean);
+      if (t.length) demoTags[k] = t;
+      else delete demoTags[k];
+      return { ...demoTags };
+    }
+    case "profile_share_code": {
+      const p = profiles.find((x) => x.id === a.id)!;
+      return `ZN1-${btoa(JSON.stringify({ game: p.game, name: p.name, mods: p.mods })).replace(/=+$/, "")}`;
+    }
+    case "profile_import_code": {
+      const code = String(a.code).replace(/\s/g, "");
+      if (!code.startsWith("ZN1-")) throw new Error("That isn't a Zom's Nexus share code (they start with ZN1-).");
+      const d = JSON.parse(atob(code.slice(4))) as Profile;
+      const p: Profile = { id: `p${Date.now()}`, name: `${d.name} (shared)`, game: d.game, mods: d.mods };
+      profiles = [...profiles, p];
+      return { profile: p, queued: 0, note: null };
+    }
+    case "mod_changelog":
+      return [
+        { version: "1.3.0", notes: ["Footsteps on wood are softer.", "Fixed snow sounds coming back after loading a save."] },
+        { version: "1.2.0", notes: ["First version with an installer."] },
+      ];
+    case "game_stop":
+      emit("game:state", { game: a.game, state: "stopped", since: now(), detail: "Stopped from Zom's Nexus" });
+      return 0;
+    case "app_backup":
+    case "app_restore":
+      throw new Error("Backups are files, so they only work in the desktop app.");
+    case "library_move_game": {
+      const g = String(a.game);
+      settings.gameLibraries = { ...(settings.gameLibraries ?? {}) };
+      if (a.to) settings.gameLibraries[g] = String(a.to);
+      else delete settings.gameLibraries[g];
+      return 1_200_000_000;
+    }
+    case "games_gone":
+      return demoGone ? [{ domain: "dungeondelvers", name: "Dungeon Delvers", path: "/mnt/games/SteamLibrary/steamapps/common/Dungeon Delvers", mods: 4, bytes: 3_400_000_000, profiles: 1 }] : [];
+    case "games_gone_answer":
+      demoGone = false;
+      return a.delete ? 3_400_000_000 : 0;
+    case "profile_history":
+      return demoHistory.filter((h) => h.game === a.game);
+    case "profile_history_note": {
+      const h = demoHistory.find((x) => x.at === a.at) as { note?: string } | undefined;
+      if (h) h.note = String(a.note);
+      return;
+    }
+    case "profile_restore": {
+      const h = demoHistory.find((x) => x.at === a.at)!;
+      const p = profiles.find((x) => x.id === h.profileId)!;
+      p.mods = structuredClone(h.mods);
+      return structuredClone(p);
+    }
+    case "fomod_read": {
+      const m = library.find((x) => x.modId === a.modId);
+      const f = m?.files.find((x) => x.fileId === a.fileId);
+      if (!f?.hasInstaller) throw new Error("This file has no installer.");
+      return { ...demoInstaller, current: f.installed?.choices ?? null, previous: f.installed?.choices ?? null };
+    }
+    case "fomod_install": {
+      const m = library.find((x) => x.modId === a.modId)!;
+      m.files = m.files.map((f) => (f.fileId === a.fileId ? { ...f, installed: { folder: `${f.unpacked} (installed)`, choices: a.choices as FomodChoice[] } } : f));
+      return structuredClone(m);
+    }
+    case "fomod_reset":
+      library.forEach((m) => (m.files = m.files.map((f) => (f.fileId === a.fileId ? { ...f, installed: null } : f))));
+      return;
+    case "fomod_image":
+      return null;
+    case "profile_addon_export":
+      throw new Error("Add-on packs are saved as files, so they only work in the desktop app.");
+    case "activity_ignored":
+      return [...demoIgnored];
+    case "activity_ignore":
+      demoIgnored = demoIgnored.filter((k) => k !== a.key);
+      if (a.on) demoIgnored.push(String(a.key));
+      return [...demoIgnored];
     case "profile_delete":
       profiles = profiles.filter((p) => p.id !== a.id);
       return;
-    case "profile_check":
-      return { ...demoCheck, at: now() };
+    case "profile_check": {
+      // The made-up problems for the first profile; the others come out clean.
+      const r: CheckReport = a.id === "p1" ? { ...demoCheck, at: now(), loaders: [], loadersMissing: [{ loader: "SKSE", mods: ["Quiet Footsteps"] }], misplaced: [{ modId: 9003, modName: "Pine Forest Textures", extra: "Pine Forest Textures v2", lands: "Data/Pine Forest Textures v2/textures", should: "Data/textures" }] } : { ...demoCheck, conflicts: [], plugins: [], needs: [], compat: [], programs: [], at: now() };
+      // The farm profile's last run had SMAPI skip mods.
+      if (a.id === "p2")
+        r.gameLog = {
+          at: now() - 3600,
+          beforeChange: false,
+          issues: [],
+          assets: [],
+          smapi: {
+            at: now() - 3600,
+            smapiVersion: "4.5.2",
+            gameVersion: "1.6.15",
+            skipped: 6,
+            broken: [
+              { name: "Seed Packets Plus", version: "2.3.0", modId: 9101, kind: "old", why: "it's no longer compatible", needs: [], dependents: ["Harvest Moods", "Barn Lights", "Fancy Fences"] },
+              { name: "Quiet Rain", version: "1.0", modId: null, kind: "missing", why: "it needs mods which aren't installed", needs: ["Weather Core"], dependents: [] },
+            ],
+            updates: [{ name: "Seed Packets Plus", have: "2.3.0", version: "2.9.1", nexusId: 9101 }],
+            errors: [["SMAPI", 12]],
+            culprits: [{ name: "Shiny Puddles", modId: null, count: 40, what: "ArgumentNullException: Value cannot be null. (Parameter 'texture')", atTheEnd: true }],
+            crashed: true,
+          },
+        };
+      demoChecks[String(a.id)] = r;
+      emit("checks:changed", 0);
+      return r;
+    }
+    case "ai_status":
+      return { settings: demoAi, hasKey: !!demoAi };
+    case "ai_set":
+      demoAi = (a.settings as typeof demoAi) ?? null;
+      return { settings: demoAi, hasKey: !!demoAi };
+    case "ai_context": {
+      const p = profiles.find((x) => x.id === a.profile);
+      return `App: Zom's Nexus (demo)\n\n## Profile: ${p?.name ?? "?"}\nMods in load order:\n${(p?.mods ?? []).map((m, i) => `${i + 1}. Mod ${m.modId}${m.enabled ? "" : " (switched off)"}`).join("\n")}\n\n## Last runs\n- closed 9 s after starting, twice\n\n## SKSE's log: 2 problem lines\nplugin QuietFootsteps.dll (00000001 QuietFootsteps 00000001) disabled, incompatible with current runtime version`;
+    }
+    case "ai_ask":
+      await new Promise((r) => setTimeout(r, 700));
+      return "The most likely cause is Quiet Footsteps: SKSE's log says its plugin was made for another version of the game, and the game started closing right after you updated it.\n\n1. On the profile, press Switch off next to Quiet Footsteps.\n2. Press Play. If the game starts, look for a newer Quiet Footsteps on its page (Update in the check).\n3. If it still closes, use Find the problem mod.";
+    case "open_steam":
+      return null;
+    case "steam_entry":
+      return { added: demoSteamAdded, steamRunning: true, program: "/home/alex/Applications/Zoms-Nexus.AppImage", appImage: true, dev: false, hasSteam: true };
+    case "steam_add":
+      if (!a.restart) throw new Error("steamRunning");
+      demoSteamAdded = true;
+      return false;
+    case "device":
+      return { deck: false, steamos: false, gameMode: false, flatpak: false };
+    case "custom_protons":
+      return ["GE-Proton9-20"];
+    case "tml_state":
+      return demoTml;
+    case "tml_set":
+      demoTml.mods = demoTml.mods.map((m) => ({ ...m, enabled: (a.mods as string[]).includes(m.name) }));
+      return null;
+    case "tml_save_pack":
+      demoTml.packs = [...demoTml.packs.filter((p) => p.name !== a.name), { name: String(a.name), mods: a.mods as string[] }];
+      return null;
+    case "ts_updates":
+      return a.game === "stardudevalley" ? { mods: [{ fullName: "Quill-Bigger_Backpack", name: "Bigger Backpack", have: "0.9.1", newest: "0.9.4", deprecated: false }], packs: [] } : { mods: [], packs: [] };
+    case "ts_update":
+      return 1;
+    case "ts_update_pack":
+      return profiles.find((p) => p.id === a.id);
+    case "r2_profiles":
+      return a.game === "stardudevalley" ? [{ name: "Co-op night", path: "/home/alex/.config/r2modmanPlus-local/StardudeValley/profiles/Co-op night" }] : [];
+    case "r2_import": {
+      const p: Profile = { id: `p${Date.now()}`, name: "Co-op night (from r2modman)", game: String(a.game), mods: [{ modId: 9101, fileId: 91010, enabled: true }], note: "Brought across from r2modman, with its config files." } as Profile;
+      profiles = [...profiles, p];
+      return { added: ["BepInEx Pack", "Lantern Paths"], had: 0, missing: [], profile: p };
+    }
+    case "ts_game":
+      return a.game === "stardudevalley" ? { community: "stardude-valley", name: "Stardude Valley", loader: "bepinex", supported: true } : null;
+    case "ts_search": {
+      const words = String(a.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const hits = DEMO_TS.filter((m) => words.every((w) => `${m.name} ${m.owner} ${m.description}`.toLowerCase().includes(w)));
+      const sorted = [...hits].sort((x, y) => (a.sort === "rating" ? y.rating - x.rating : a.sort === "new" ? y.updated.localeCompare(x.updated) : y.downloads - x.downloads));
+      return { results: sorted, total: sorted.length };
+    }
+    case "ts_add": {
+      const m = DEMO_TS.find((x) => x.fullName === a.fullName);
+      return { added: [m?.name.replaceAll("_", " ") ?? "Mod", ...(m?.needs ? ["BepInEx Pack"] : [])], had: 0, missing: [], profile: null };
+    }
+    case "games_clear_all":
+      return [["Frostrim: The Elder Moods"], []];
+    case "mo2_look":
+      return { folder: "/home/alex/Games/MO2 Frostrim", profiles: ["Default", "Survival"], mods: 2, gameName: "Frostrim" };
+    case "mo2_import": {
+      const p: Profile = { id: `p${Date.now()}`, name: `${a.profile} (from MO2)`, game: String(a.game), mods: [9001, 9002].map((m) => ({ modId: m, fileId: m * 10, enabled: true })), note: "Brought across from Mod Organizer 2." } as Profile;
+      profiles = [...profiles, p];
+      return { profile: p, added: 0, skipped: ["Old Lantern Fix"], bytesCopied: 0 };
+    }
+    case "profile_settings": {
+      const own = demoSettings[String(a.id)] ?? {};
+      // Only the Frostrim profiles' mods have these.
+      const game = profiles.find((p) => p.id === a.id)?.game;
+      return game === "frostrim" ? DEMO_SETTINGS.map((f) => ({ path: f.path, modId: f.modId, modName: f.modName, own: f.path in own })) : [];
+    }
+    case "profile_setting_read": {
+      const own = demoSettings[String(a.id)] ?? {};
+      return own[String(a.path)] ?? DEMO_SETTINGS.find((f) => f.path === a.path)?.text ?? "";
+    }
+    case "profile_setting_write":
+      (demoSettings[String(a.id)] ??= {})[String(a.path)] = String(a.text);
+      return null;
+    case "profile_setting_reset":
+      delete (demoSettings[String(a.id)] ?? {})[String(a.path)];
+      return null;
+    case "profile_last_run":
+      // The first profile's last run closed right away, after a new mod went in.
+      return a.id === "p1" ? { at: now() - 2 * 3600, secs: 9, times: 2, goodAt: now() - 3 * 86400, goodSecs: 2 * 3600 + 600, added: [{ modId: 9003, name: "Pine Forest Textures" }], removed: [], updated: [{ modId: 9002, name: "Quiet Footsteps" }], changedSince: false } : null;
     case "profile_checks":
-      return {};
+      return structuredClone(demoChecks);
     case "profile_apply":
     case "profile_play": {
       const p = profiles.find((p) => p.id === a.id)!;

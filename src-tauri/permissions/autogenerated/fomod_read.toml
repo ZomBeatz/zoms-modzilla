@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fomod-read"
+description = "Enables the fomod_read command without any pre-configured scope."
+commands.allow = ["fomod_read"]
+
+[[permission]]
+identifier = "deny-fomod-read"
+description = "Denies the fomod_read command without any pre-configured scope."
+commands.deny = ["fomod_read"]

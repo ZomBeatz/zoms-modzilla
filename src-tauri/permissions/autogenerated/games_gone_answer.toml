@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-games-gone-answer"
+description = "Enables the games_gone_answer command without any pre-configured scope."
+commands.allow = ["games_gone_answer"]
+
+[[permission]]
+identifier = "deny-games-gone-answer"
+description = "Denies the games_gone_answer command without any pre-configured scope."
+commands.deny = ["games_gone_answer"]

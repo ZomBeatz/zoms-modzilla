@@ -19,11 +19,12 @@
         "height": 820,
         "minWidth": 860,
         "minHeight": 560,
-        "visible": false
+        "visible": false,
+        "focus": false
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://staticdelivery.nexusmods.com https://*.nexusmods.com; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://staticdelivery.nexusmods.com https://*.nexusmods.com https://*.thunderstore.io; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {

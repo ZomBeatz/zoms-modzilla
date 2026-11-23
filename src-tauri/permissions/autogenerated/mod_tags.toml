@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mod-tags"
+description = "Enables the mod_tags command without any pre-configured scope."
+commands.allow = ["mod_tags"]
+
+[[permission]]
+identifier = "deny-mod-tags"
+description = "Denies the mod_tags command without any pre-configured scope."
+commands.deny = ["mod_tags"]

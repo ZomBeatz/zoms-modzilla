@@ -18,7 +18,7 @@ const KEEP: u64 = 24 * 3600;
 const QUERY: &str = "query ZomsNexusRequirements($ids: [CompositeDomainWithIdInput!]!, $count: Int) {
   legacyModsByDomain(ids: $ids, count: $count) {
     nodes {
-      modId name status updatedAt
+      modId name status updatedAt adult category
       game { id domainName }
       modRequirements {
         nexusRequirements { nodes { modId modName url externalRequirement gameId notes } }
@@ -54,8 +54,20 @@ pub struct Facts {
     pub requires: Vec<Requirement>,
     /// Expansions it needs ("Phantom Liberty").
     pub dlc: Vec<String>,
+    /// Marked as adult content on Nexus Mods.
+    #[serde(default)]
+    pub adult: bool,
+    /// Its category on Nexus Mods ("Gameplay", "Visuals and Graphics").
+    #[serde(default)]
+    pub category: Option<String>,
     pub fetched: u64,
+    /// Which version of this list wrote it; older answers are asked again (they lack fields).
+    #[serde(default)]
+    pub v: u32,
 }
+
+/// Raise when Facts gains a field, so answers kept from before are asked again.
+const FACTS_V: u32 = 2;
 
 fn key(game: &str, mod_id: u64) -> String {
     format!("{game}:{mod_id}")
@@ -129,7 +141,10 @@ pub fn read(data: &Value, now: u64) -> Vec<Facts> {
             updated_at: n["updatedAt"].as_str().and_then(unix_time),
             requires,
             dlc,
+            adult: n["adult"].as_bool().unwrap_or(false),
+            category: text(&n["category"]),
             fetched: now,
+            v: FACTS_V,
         });
     }
     out
@@ -140,7 +155,7 @@ pub fn read(data: &Value, now: u64) -> Vec<Facts> {
 pub async fn facts(nexus: &Nexus, data: &Path, wanted: &[(String, u64)]) -> Result<HashMap<String, Facts>, ApiError> {
     let now = crate::queue::now();
     let mut all = load(data);
-    let mut ask: Vec<&(String, u64)> = wanted.iter().filter(|(g, m)| all.get(&key(g, *m)).map(|f| now.saturating_sub(f.fetched) > KEEP).unwrap_or(true)).collect();
+    let mut ask: Vec<&(String, u64)> = wanted.iter().filter(|(g, m)| all.get(&key(g, *m)).map(|f| f.v < FACTS_V || now.saturating_sub(f.fetched) > KEEP).unwrap_or(true)).collect();
     ask.sort();
     ask.dedup();
     let mut error = None;
@@ -149,6 +164,10 @@ pub async fn facts(nexus: &Nexus, data: &Path, wanted: &[(String, u64)]) -> Resu
         match nexus.graphql(QUERY, json!({ "ids": ids, "count": chunk.len() })).await {
             Ok(d) => {
                 for f in read(&d, now) {
+                    // A mod that was published and isn't any more: worth knowing.
+                    if f.status != "published" && all.get(&key(&f.game, f.mod_id)).map(|o| o.status == "published") == Some(true) {
+                        crate::activity::add("gone", format!("“{}” is gone from Nexus Mods", f.name), Some(format!("Nexus Mods marks it {}. Your copy still works, but it won't get fixes.", f.status)), Some(&f.game), Some("library"), None);
+                    }
                     all.insert(key(&f.game, f.mod_id), f);
                 }
             }
@@ -200,7 +219,8 @@ pub fn resolve(p: &mut crate::deploy::Profile, library: &[crate::library::Stored
             continue;
         }
         let Some(f) = lookup(facts, &p.game, needer) else { continue };
-        for q in f.requires.iter().filter(|q| q.mod_id != 0 && !q.other_game) {
+        // Add-ons and optional mods a page lists are left to the person.
+        for q in f.requires.iter().filter(|q| q.mod_id != 0 && !q.other_game && !crate::check::soft(q.notes.as_deref())) {
             if let Some(m) = p.mods.iter_mut().find(|m| m.mod_id == q.mod_id) {
                 if !m.enabled {
                     m.enabled = true;
@@ -233,7 +253,9 @@ pub fn resolve(p: &mut crate::deploy::Profile, library: &[crate::library::Stored
             return; // Already placed, or a loop (two mods needing each other): leave it be.
         }
         if let Some(f) = lookup(facts, game, id) {
-            for q in &f.requires {
+            // Add-ons and optional mods a page lists don't decide the order (two mods often
+            // list each other: "requires NCTO" and "NCTO add-on").
+            for q in f.requires.iter().filter(|q| !crate::check::soft(q.notes.as_deref())) {
                 if q.mod_id != 0 && all.iter().any(|m| m.mod_id == q.mod_id) {
                     place(q.mod_id, all, game, facts, placed, visiting);
                 }
@@ -279,7 +301,10 @@ mod tests {
             updated_at: None,
             requires: requires.iter().map(|r| Requirement { mod_id: *r, name: format!("M{r}"), url: None, other_game: false, notes: None }).collect(),
             dlc: vec![],
+            adult: false,
+            category: None,
             fetched: 0,
+            v: 0,
         }
     }
 
@@ -287,7 +312,7 @@ mod tests {
     fn puts_in_and_sorts_requirements() {
         use crate::deploy::{Profile, ProfileMod};
         use crate::library::{StoredFile, StoredMod};
-        let lib = |id: u64| StoredMod { game: "g".into(), mod_id: id, name: format!("M{id}"), author: None, version: None, summary: None, picture_url: None, local: false, folder: String::new(), files: vec![StoredFile { file_id: id * 10, name: "f".into(), file_name: "f.zip".into(), version: None, category: None, size: 1, downloaded_at: 1, archive: None, unpacked: None, uploaded: None, verified: None }] };
+        let lib = |id: u64| StoredMod { game: "g".into(), mod_id: id, source: None, name: format!("M{id}"), author: None, version: None, summary: None, picture_url: None, local: false, adult: false, folder: String::new(), files: vec![StoredFile { file_id: id * 10, name: "f".into(), file_name: "f.zip".into(), version: None, category: None, size: 1, downloaded_at: 1, archive: None, unpacked: None, uploaded: None, verified: None, installed: None, has_installer: false }] };
         // 5 (a texture pack) first, then 1, which needs 2 (in the library) and 9 (not downloaded);
         // 2 needs 3, which is in the profile but switched off and below everything.
         let library = vec![lib(1), lib(2), lib(3), lib(5)];
@@ -296,7 +321,7 @@ mod tests {
             facts.insert(key("g", f.mod_id), f);
         }
         let on = |id: u64, e: bool| ProfileMod { mod_id: id, file_id: id * 10, enabled: e };
-        let mut p = Profile { id: "p".into(), name: "P".into(), game: "g".into(), mods: vec![on(5, true), on(1, true), on(3, false)], collection: None, manual_requirements: false, new_downloads: false };
+        let mut p = Profile { id: "p".into(), name: "P".into(), game: "g".into(), mods: vec![on(5, true), on(1, true), on(3, false)], collection: None, manual_requirements: false, new_downloads: false, own_saves: false, base: None, addons: vec![], rules: vec![], note: None, ts_pack: None };
         let r = resolve(&mut p, &library, &facts);
         assert_eq!(r.added, vec!["M2".to_string()]);
         assert_eq!(r.switched_on, vec!["M3".to_string()]);
@@ -306,6 +331,22 @@ mod tests {
         // Running it again changes nothing.
         let again = resolve(&mut p, &library, &facts);
         assert_eq!((again.added.len(), again.switched_on.len(), again.moved), (0, 0, 0));
+
+        // Two mods listing each other: 20 really needs 10; 10 lists 20 as an add-on (and 30 too,
+        // which isn't added). 10 ends up above 20 whichever way round they start.
+        let library = vec![lib(10), lib(20), lib(30)];
+        let mut facts = HashMap::new();
+        let mut ten = fact(10, &[20, 30]);
+        ten.requires.iter_mut().for_each(|q| q.notes = Some("ADDON: modded vehicle list".into()));
+        let mut twenty = fact(20, &[10]);
+        twenty.requires[0].notes = Some("MANDATORY".into());
+        for f in [ten, twenty] {
+            facts.insert(key("g", f.mod_id), f);
+        }
+        let mut p = Profile { id: "p".into(), name: "P".into(), game: "g".into(), mods: vec![on(20, true), on(10, true)], collection: None, manual_requirements: false, new_downloads: false, own_saves: false, base: None, addons: vec![], rules: vec![], note: None, ts_pack: None };
+        let r = resolve(&mut p, &library, &facts);
+        assert!(r.added.is_empty(), "add-ons aren't put in: {:?}", r.added);
+        assert_eq!(p.mods.iter().map(|m| m.mod_id).collect::<Vec<_>>(), vec![10, 20]);
     }
 
     #[test]

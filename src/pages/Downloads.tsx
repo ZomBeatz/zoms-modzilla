@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, ArrowUpToLine, ChevronDown, ChevronUp, Download, ExternalLink, FolderOpen, Gauge, Layers, MousePointerClick, Pause, Play, Plus, RotateCcw, Trash2, Zap } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, ArrowUpToLine, ChevronDown, ChevronUp, Clock, Download, ExternalLink, FolderOpen, Gauge, Layers, MousePointerClick, Pause, Play, Plus, RotateCcw, Trash2, Zap } from "lucide-react";
 import { api, fileUrl, modUrl, openUrl, type Job, type ModFacts, type StoredMod } from "../api";
+import { factKey, isAdult, isGone, useFacts } from "../facts";
 import { GameTag } from "../art";
 import { awaitingClick, type Ctx } from "../App";
 import { bytes, eta, percent, plural, speed } from "../format";
 import { Confirm, StatusPill, Stepper, tidy } from "../ui";
 import { AddToProfile } from "./AddToProfile";
 import { NeedsDialog, NeedsLine } from "./Needs";
+import { OnlyGameToggle, useOnlyGame } from "../onlyGame";
 
 const MAX = 8;
 
-/** Mods whose requirements were asked for this run, and the answers. */
-const asked = new Set<string>();
-const known = new Map<string, ModFacts>();
+const SHOW_LABEL: Record<string, string> = { all: "All files", you: "Waiting for you", active: "Downloading now", waiting: "Waiting their turn", failed: "Failed", done: "Finished", needs: "Needs other mods", gone: "Gone from Nexus Mods", adult: "Adult", notAdult: "Not adult" };
 
 /** Speed limit choices, in bytes a second (0 = no limit). */
 export const LIMITS: [number, string][] = [
@@ -119,39 +119,43 @@ export function Downloads(ctx: Ctx) {
   // What each listed mod needs: one request per game for the mods not looked up yet (and the
   // app keeps the answers for a day).
   const [library, setLibrary] = useState<StoredMod[]>([]);
-  const [facts, setFacts] = useState<Record<string, ModFacts>>({});
   const [needsOf, setNeedsOf] = useState<ModFacts | null>(null);
   useEffect(() => {
     api.library().then(setLibrary, () => {});
   }, [ctx.libraryVersion]);
-  const modKeys = [...new Set(allJobs.map((j) => `${j.game}:${j.modId}`))].sort().join(",");
-  useEffect(() => {
-    const byGame = new Map<string, number[]>();
-    for (const k of modKeys ? modKeys.split(",") : []) {
-      if (asked.has(k)) continue;
-      asked.add(k);
-      const [g, m] = k.split(":");
-      byGame.set(g, [...(byGame.get(g) ?? []), Number(m)]);
-    }
-    for (const [g, ids] of byGame)
-      api.modRequirements(g, ids).then(
-        (found) => {
-          for (const f of found) known.set(`${f.game}:${f.modId}`, f);
-          setFacts(Object.fromEntries(known));
-        },
-        () => ids.forEach((id) => asked.delete(`${g}:${id}`)),
-      );
-    setFacts(Object.fromEntries(known));
-  }, [modKeys]);
+  const facts = useFacts([...new Set(allJobs.map((j) => factKey(j.game, j.modId)))].sort());
+  const [show, setShow] = useState("all");
   const [removing, setRemoving] = useState<Job | null>(null);
   const [profiling, setProfiling] = useState<Job | null>(null);
-  // Only the picked game's files; the order (and moving up and down) is still the whole list's.
-  const jobs = game ? allJobs.filter((j) => j.game === game) : allJobs;
+  // Every game's files, or only the picked game's; the order (and moving up and down) is still the whole list's.
+  const [onlyGame, setOnlyGame] = useOnlyGame("downloads");
+  const jobs = game && onlyGame ? allJobs.filter((j) => j.game === game) : allJobs;
   const elsewhere = allJobs.length - jobs.length;
   const gameName = (d: string) => games.find((g) => g.domain === d)?.name ?? d;
   const act = (p: Promise<unknown>) => p.catch((e) => toast((e as Error).message));
   const waiting = jobs.filter((j) => j.status !== "done");
   const done = jobs.filter((j) => j.status === "done");
+  const adultJob = (j: Job) => isAdult(facts, j.game, j.modId);
+  const categories = [...new Set(jobs.map((j) => facts[factKey(j.game, j.modId)]?.category).filter((c): c is string => !!c))].sort();
+  /** The "Show" filter: kinds of state, adult, or one category. */
+  const fits = (j: Job) => {
+    const f = facts[factKey(j.game, j.modId)];
+    switch (show) {
+      case "all": return true;
+      case "you": return awaitingClick(j);
+      case "active": return ["starting", "downloading", "storing"].includes(j.status);
+      case "waiting": return ["queued", "paused", "waiting", "needsLink"].includes(j.status);
+      case "failed": return j.status === "failed";
+      case "done": return j.status === "done";
+      case "adult": return adultJob(j);
+      case "notAdult": return !adultJob(j);
+      case "needs": return !!f?.requires.length || !!f?.dlc.length;
+      case "gone": return isGone(f);
+      default: return show.startsWith("cat:") && f?.category === show.slice(4);
+    }
+  };
+  const waitingShown = waiting.filter(fits);
+  const doneShown = done.filter(fits);
   const canPause = allJobs.some((j) => ["queued", "starting", "downloading", "waiting"].includes(j.status));
   const canResume = allJobs.some((j) => j.status === "paused");
   const total = allJobs.filter((j) => j.status === "downloading").reduce((n, j) => n + j.speed, 0);
@@ -189,6 +193,8 @@ export function Downloads(ctx: Ctx) {
         <div className="sub">
           {j.name}
           {j.version ? ` · ${j.version}` : ""}
+          {adultJob(j) && <span className="pill warn tiny-pill">Adult</span>}
+          {isGone(facts[factKey(j.game, j.modId)]) && <span className="pill warn tiny-pill" title="Nexus Mods doesn't show this mod any more (hidden, removed or being checked)">Gone from Nexus Mods</span>}
         </div>
         {facts[`${j.game}:${j.modId}`] && <NeedsLine facts={facts[`${j.game}:${j.modId}`]} library={library} jobs={allJobs} onOpen={() => setNeedsOf(facts[`${j.game}:${j.modId}`])} />}
         {j.error && !awaitingClick(j) && <div className={j.status === "failed" ? "err-text" : "warn-text"}>{j.error}</div>}
@@ -269,6 +275,7 @@ export function Downloads(ctx: Ctx) {
     <div className="page">
       <div className="page-head">
         <h1>Downloads</h1>
+        <OnlyGameToggle only={onlyGame} onChange={setOnlyGame} gameName={game ? gameName(game) : undefined} />
         {total > 0 && <span className="muted num">{speed(total)}</span>}
         {ctx.overview.freeSpace != null && <span className="muted num hide-narrow">{bytes(ctx.overview.freeSpace)} free</span>}
         <button className="btn" disabled={!canPause} onClick={() => act(api.pauseAll())}>
@@ -317,23 +324,58 @@ export function Downloads(ctx: Ctx) {
           )}
         </div>
       )}
-      {game && elsewhere > 0 && (
+      {ctx.overview.held && waiting.some((j) => j.status === "queued") && (
+        <p className="collection-note small" style={{ marginTop: 0 }}>
+          <Clock size={14} /> {ctx.overview.held}
+        </p>
+      )}
+      {game && onlyGame && elsewhere > 0 && (
         <p className="other-games muted small">
-          Showing {gameName(game)}. {plural(elsewhere, "more file")} for other games {elsewhere === 1 ? "is" : "are"} in the list too; pick that game to see {elsewhere === 1 ? "it" : "them"}.
+          Showing only {gameName(game)}. {plural(elsewhere, "more file")} for other games {elsewhere === 1 ? "is" : "are"} in the list too.{" "}
+          <button className="btn ghost sm" onClick={() => setOnlyGame(false)}>
+            Show all games
+          </button>
         </p>
       )}
       {!loaded ? null : jobs.length === 0 ? (
         <div className="empty">
           <Download size={32} />
-          <p>{game ? `${gameName(game)} files you download from Nexus Mods show up here while they download.` : "Files you download from Nexus Mods show up here while they download."}</p>
+          <p>{game && onlyGame ? `${gameName(game)} files you download from Nexus Mods show up here while they download.` : "Files you download from Nexus Mods show up here while they download."}</p>
           <button className="btn primary" onClick={() => openAdd()}>
             Add mod…
           </button>
         </div>
       ) : (
         <>
-        {(waiting.filter((j) => !j.status.match(/starting|downloading|storing/)).length > 1 || failed > 0) && (
           <div className="toolbar">
+            <label className="row gap-sm">
+              <span className="muted small">Show</span>
+              <select value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
+                <option value="all">All files</option>
+                {clicks.some((j) => jobs.includes(j)) && <option value="you">Waiting for you</option>}
+                <option value="active">Downloading now</option>
+                <option value="waiting">Waiting their turn</option>
+                {jobs.some((j) => j.status === "failed") && <option value="failed">Failed</option>}
+                {done.length > 0 && <option value="done">Finished</option>}
+                <option value="needs">Needs other mods</option>
+                {jobs.some((j) => isGone(facts[factKey(j.game, j.modId)])) && <option value="gone">Gone from Nexus Mods</option>}
+                {jobs.some(adultJob) && (
+                  <>
+                    <option value="adult">Adult</option>
+                    <option value="notAdult">Not adult</option>
+                  </>
+                )}
+                {categories.length > 0 && (
+                  <optgroup label="Category">
+                    {categories.map((c) => (
+                      <option key={c} value={`cat:${c}`}>
+                        {c}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
             {waiting.filter((j) => !j.status.match(/starting|downloading|storing/)).length > 1 && (
               <span className="row gap-sm">
                 <span className="muted small">Order the waiting files</span>
@@ -352,7 +394,6 @@ export function Downloads(ctx: Ctx) {
               </button>
             )}
           </div>
-        )}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -365,12 +406,22 @@ export function Downloads(ctx: Ctx) {
               </tr>
             </thead>
             <tbody>
-              {waiting.map(row)}
-              {done.length > 0 && (
+              {waitingShown.map((j) => row(j, waiting.indexOf(j)))}
+              {waitingShown.length + doneShown.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    Nothing here matches “{SHOW_LABEL[show] ?? show.slice(4)}”.{" "}
+                    <button className="link-name" onClick={() => setShow("all")}>
+                      Show everything
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {doneShown.length > 0 && (
                 <tr className="group-row">
                   <td colSpan={5}>
                     <div className="row between">
-                      <span>Finished · {plural(done.length, "file")}</span>
+                      <span>Finished · {plural(doneShown.length, "file")}</span>
                       <button className="btn sm ghost" onClick={() => act(api.clearFinished())}>
                         Clear finished
                       </button>
@@ -378,7 +429,7 @@ export function Downloads(ctx: Ctx) {
                   </td>
                 </tr>
               )}
-              {done.map(row)}
+              {doneShown.map((j) => row(j, 0))}
             </tbody>
           </table>
         </div>

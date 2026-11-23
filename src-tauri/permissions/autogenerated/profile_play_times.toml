@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-play-times"
+description = "Enables the profile_play_times command without any pre-configured scope."
+commands.allow = ["profile_play_times"]
+
+[[permission]]
+identifier = "deny-profile-play-times"
+description = "Denies the profile_play_times command without any pre-configured scope."
+commands.deny = ["profile_play_times"]

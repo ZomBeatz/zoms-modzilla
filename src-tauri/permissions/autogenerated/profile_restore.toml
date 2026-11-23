@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profile-restore"
+description = "Enables the profile_restore command without any pre-configured scope."
+commands.allow = ["profile_restore"]
+
+[[permission]]
+identifier = "deny-profile-restore"
+description = "Denies the profile_restore command without any pre-configured scope."
+commands.deny = ["profile_restore"]

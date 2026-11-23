@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ts-add"
+description = "Enables the ts_add command without any pre-configured scope."
+commands.allow = ["ts_add"]
+
+[[permission]]
+identifier = "deny-ts-add"
+description = "Denies the ts_add command without any pre-configured scope."
+commands.deny = ["ts_add"]

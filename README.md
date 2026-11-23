@@ -7,7 +7,7 @@
 
 <p align="center">
   <b>Every mod you download, kept in order.</b><br>
-  A free Nexus Mods manager for Linux: downloads and collections, profiles per game with a conflict check, and Play.
+  A free mod manager for Linux and the Steam Deck: Nexus Mods and Thunderstore, collections, profiles per game with a conflict check, troubleshooting, and Play.
 </p>
 
 ## Quick start
@@ -61,13 +61,22 @@ On some NVIDIA setups the window can stay white. Zom's Nexus already turns off t
 | **Free and Premium accounts** | Free accounts click **Slow download** for each file, as Nexus Mods asks; the app shows the pages one after another in its own Nexus Mods window. Premium accounts get every file without clicks, several at once. |
 | **A tidy library** | `~/Games/Nexus Mods/<game>/<mod id> - <name>/`, with a `nexus.json` for each mod. Zip, 7z and rar files are unpacked when they finish (you can turn that off). |
 | **Your games** | Cover art for each one. Finds Nexus Mods games in every Steam library folder (native and Proton, Flatpak and Snap), and the Games page lists the folders it searched. Add others by hand, with their mod folder and start command. |
+| **Mod installers** | Mods with an installer (FOMOD) show each step with its pictures; your choices are kept for the next version, and a collection's curator choices are used by themselves. |
+| **Thunderstore too** | For the 280+ BepInEx games on Thunderstore (Valheim, Lethal Company, R.E.P.O. …): search, get a mod with everything it needs, update all, and keep profiles made from mod packs up to date. No Overwolf. |
+| **Bring your setup across** | Make a profile from a Mod Organizer 2 profile (nothing downloaded again, installer choices kept) or from an r2modman profile or profile code (its config files too). |
+| **Each profile's own settings** | Mods' settings files (.ini, .cfg, .json …) are kept per profile, with an editor that turns them into switches and boxes. |
+| **When a game won't start** | Notices a game that closes right after starting and shows what changed since it last ran fine; reads mod loaders' logs (SMAPI, script extenders, BepInEx, MelonLoader, UE4SS, REFramework, Cyber Engine Tweaks, RED4ext) and names the mod at fault; warns before Play when the same crash is coming; finds loaders a profile needs but doesn't have, mods packed a folder too deep, and the Proton launch options mod loaders need. **Play without mods** and **Find the problem mod** narrow it down. |
+| **Ask AI (optional)** | Bring any AI service (Claude, OpenAI, Gemini, OpenRouter, or one on your own computer like Ollama): it gets the check, the logs and the last runs, with your home folder and names taken out, and only when you press Send. |
+| **Steam Deck** | **Add to Steam** puts it in your library with artwork, so Game Mode opens it full screen; the controller moves between buttons (A, B, Y, L1/R1), text boxes open Steam's keyboard, and mods on an SD card stay on the card. |
+| **More launchers** | Games from Heroic (GOG, Epic, Amazon) and Lutris as well as Steam; shows which Proton each runs with. Terraria's tModLoader mods and mod packs too. |
+| **Saves per profile** | A heavily modded profile can keep its own saves; Zom's Nexus asks before the first Play and warns when Steam Cloud would copy saves back in. |
 | **Privacy** | No account of its own and no tracking. Your API key stays on your computer in a file only you can read. |
 
-Not done yet: mod installers with choices (FOMOD) put in their main files only, and Baldur's Gate 3's own mod list isn't managed. Collection files hosted outside Nexus Mods have to be fetched by hand.
+Not done yet: Baldur's Gate 3's own mod list isn't managed, and Thunderstore games with loaders other than BepInEx can be browsed but not installed. Collection files hosted outside Nexus Mods have to be fetched by hand.
 
 ## Building it
 
-Needs Node.js 20 or newer, Rust, and Tauri's Linux packages (`webkit2gtk-4.1`, `libayatana-appindicator`, `librsvg`).
+Needs Node.js 20 or newer, Rust, Tauri's Linux packages (`webkit2gtk-4.1`, `libayatana-appindicator`, `librsvg`), and libudev (`systemd-libs` on Arch, `libudev-dev` on Debian and Ubuntu) for controllers.
 
 ```bash
 npm install
@@ -89,6 +98,10 @@ npm run bundle    # .deb, .rpm and .AppImage in src-tauri/target/release/bundle
 | Profiles | `~/.config/com.zombeatz.zoms-nexus/profiles.json` |
 | What's in each game now | `~/.local/share/com.zombeatz.zoms-nexus/deployed/<game>.json`, and the game's own replaced files in `<game folder>/.zoms-nexus-backup` |
 | Game art | `~/.cache/com.zombeatz.zoms-nexus/art` |
+| Each profile's mod settings | `~/.local/share/com.zombeatz.zoms-nexus/profile-settings/<profile>/` |
+| How each Play went | `~/.local/share/com.zombeatz.zoms-nexus/runs/<profile>.json` |
+| The AI service's key (if you set one) | `~/.config/com.zombeatz.zoms-nexus/ai-key` (only you can read it) |
+| Thunderstore's lists | `~/.cache/com.zombeatz.zoms-nexus/thunderstore` (fetched at most once an hour) |
 
 ## License
 

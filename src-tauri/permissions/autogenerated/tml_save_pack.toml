@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tml-save-pack"
+description = "Enables the tml_save_pack command without any pre-configured scope."
+commands.allow = ["tml_save_pack"]
+
+[[permission]]
+identifier = "deny-tml-save-pack"
+description = "Denies the tml_save_pack command without any pre-configured scope."
+commands.deny = ["tml_save_pack"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-custom-protons"
+description = "Enables the custom_protons command without any pre-configured scope."
+commands.allow = ["custom_protons"]
+
+[[permission]]
+identifier = "deny-custom-protons"
+description = "Denies the custom_protons command without any pre-configured scope."
+commands.deny = ["custom_protons"]

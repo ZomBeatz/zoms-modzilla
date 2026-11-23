@@ -1,49 +1,64 @@
 # Demo art prompts
 
-Pictures for the browser demo's made-up games. Make them with any image AI, then save them in
-`public/demo-art/` with the names below (`.webp`, `.jpg` or `.png`). The demo uses a picture when
-it's there and its own drawing when it isn't. Keep each under about 400 KB (webp is smallest),
-since the folder ships inside the app.
+One prompt per picture for the browser demo's made-up games. Make each picture on its own (not
+several on one sheet), save it with the file name shown, and put it in `public/demo-art/`. The
+demo uses a picture when it's there and its own drawing when it isn't.
 
-Keep them original: no real game's logo, characters, or cover layout.
+- **Covers and banners:** `.webp` or `.jpg`, under about 400 KB each (the folder ships inside the app).
+- **Logos:** `.png` with a **real** transparent background. Many image sites paint a grey and
+  white checkerboard into the picture instead: open the file, and if the checkerboard is still
+  there, remove the background (remove.bg, or GIMP: Colors > Color to Alpha) or leave the logo
+  out. Without a logo, the app writes the game's name over the banner instead.
+- **Keep them original:** no real game's logo lettering, characters or cover layout. The titles
+  below are deliberately styled away from the games they parody.
 
-## Sizes
+Free places to make them: **Microsoft Designer / Bing Image Creator**, **Ideogram** (best at
+text), **Leonardo.ai** (lets you set exact sizes). To make a webp: `cwebp -q 80 in.png -o out.webp`.
 
-| Kind | Name ending | Size | Notes |
-|---|---|---|---|
-| Cover | `-cover` | 600 × 900 (2:3, portrait) | The game's title at the top |
-| Banner | `-hero` | 1920 × 620 (wide) | No text; the app puts the logo over the left side |
-| Logo | `-logo` | 800 × 260, transparent PNG | Just the title, styled |
+---
 
-## Cyberhunk 2088 (`cyberhunk2088-…`)
+## Stardude Valley
 
-**Cover:** Original video game cover art, portrait 2:3. A confident young man, chest-up, three-quarter view, undercut hair swept to one side, a sleek wraparound visor glowing cyan to magenta over his eyes, a black high-collar techwear jacket with thin neon seams. Behind him a dense night megacity with glowing windows and holographic signs. Hot yellow background panel with glitchy cyan and magenta bars. Bold title text "CYBERHUNK 2088" at the top in a sharp futuristic font. Stylized semi-realistic digital painting, high contrast, clean composition.
+### `stardudevalley-cover.webp` (600 × 900, portrait)
 
-**Banner:** Wide cinematic banner, 1920×620, no text. The same man standing on a rooftop on the right third, looking out over a neon night megacity, rain, holographic billboards, yellow and cyan glow, empty dark space on the left for a logo.
+Original cozy farming game cover art, portrait 2:3, warm painterly illustration. A cheerful young farmer seen from the chest up, three-quarter view, woven straw hat with a red band, messy brown hair, freckles, rosy cheeks, gentle smile, red plaid flannel shirt under blue denim overalls with brass buttons, a hoe resting on his shoulder. Behind him rolling green hills, a small red barn, sunflowers in the foreground, a bright sun and fluffy clouds. At the top, the title "Stardude Valley" in hand-painted white letters with a soft red outline, like a vintage barn sign or seed packet, with a small sun above the "S". No wooden plank behind the title, no leaves on the letters.
 
-**Logo:** Logo text "CYBERHUNK 2088" on a transparent background, chunky angular futuristic letters, yellow with a cyan glitch offset and a thin magenta outline, no other elements.
+### `stardudevalley-hero.webp` (1920 × 620, wide)
 
-## Frostrim: The Elder Moods (`frostrim-…`)
+Wide cinematic banner, 1920×620, warm painterly illustration, no text anywhere. A sunny farm on the right two-thirds: rows of crops, a red barn and silo, a scarecrow, chickens on a dirt path, and the same freckled farmer in a straw hat and overalls waving and holding a basket of tomatoes. Rolling hills and soft blue sky on the left third, kept open for a logo.
 
-**Cover:** Original fantasy game cover art, portrait 2:3. A broad-shouldered warrior seen from the chest up, steel helmet with two curved ivory horns, thick fur cloak over chainmail, braided red beard, calm grumpy expression, light snow falling. Behind him jagged snowy mountains under a pale blue sky. Title text "FROSTRIM" with a smaller subtitle "The Elder Moods" at the top in carved stone letters. Painterly, cold blue and grey palette with warm skin tones.
+### `stardudevalley-logo.png` (800 × 260, transparent)
 
-**Banner:** Wide cinematic banner, 1920×620, no text. A lone horned warrior on a ridge on the right third, wind blowing his cloak, a vast valley of snowy peaks and pine forests, soft morning light, open sky on the left for a logo.
+Logo text "Stardude Valley" alone on a transparent background. Hand-painted white letters with a soft red outline and a slight drop shadow, like the lettering on a vintage barn sign or seed packet. A small simple yellow sun above the "S". No wooden plank, no leaves, nothing else in the picture.
 
-**Logo:** Logo text "FROSTRIM" with "The Elder Moods" underneath, on a transparent background, weathered silver letters like carved stone with frost on the edges.
+---
 
-## Stardude Valley (`stardudevalley-…`)
+## Frostrim: The Elder Moods
 
-**Cover:** Original cozy farming game cover art, portrait 2:3, pixel-art-inspired painterly style. A cheerful young farmer, chest-up, woven straw hat with a red band, freckles, rosy cheeks, red plaid shirt under blue denim overalls, a hoe resting on his shoulder. Behind him rolling green fields, a small wooden barn, a big warm sun and fluffy clouds. Rounded friendly title text "STARDUDE VALLEY" at the top. Bright, warm, inviting colors.
+### `frostrim-cover.webp` (600 × 900, portrait)
 
-**Banner:** Wide banner, 1920×620, no text. A sunny farm on the right two-thirds: crop rows, a red barn, chickens, the farmer waving; soft sky on the left for a logo.
+Original fantasy game cover art, portrait 2:3, detailed painterly style. A broad-shouldered warrior seen from the chest up, three-quarter view, steel helmet with two curved ivory horns, thick fur cloak over chainmail, braided red beard, calm and slightly grumpy expression, light snow falling. Behind him jagged snowy mountains under a pale blue sky. At the top, the title "FROSTRIM" in weathered silver carved-stone letters with frost on the edges, and a smaller line "The Elder Moods" underneath. Cold blue and grey palette with warm skin tones.
 
-**Logo:** Logo text "Stardude Valley" on a transparent background, rounded bubbly wooden-sign letters in warm yellow and brown with a little leaf on the "V".
+### `frostrim-hero.webp` (1920 × 620, wide)
 
-## Free places to make them
+Wide cinematic banner, 1920×620, detailed painterly style, no text anywhere. A lone horned warrior with an axe stands on a snowy ridge on the right third, wind blowing his fur cloak. Below, a vast valley of snowy peaks, pine forests, a frozen lake and distant stone ruins, soft morning sunlight. Open sky on the left for a logo.
 
-- **Microsoft Designer / Bing Image Creator** (free with a Microsoft account): paste a prompt, pick the closest result, download.
-- **Ideogram** (free tier): good at putting text like titles into images.
-- **Leonardo.ai** (free daily credits): lets you set the exact size.
+### `frostrim-logo.png` (800 × 260, transparent)
 
-Then convert to webp if you like (`cwebp -q 80 in.png -o cyberhunk2088-cover.webp`) and drop them in
-`public/demo-art/`. Reload the demo to see them.
+Logo text "FROSTRIM" with "The Elder Moods" in smaller letters underneath, alone on a transparent background. Weathered silver letters like carved stone, with frost and small icicles on the edges, and a thin line with a small knot symbol between the two lines of text. Nothing else in the picture.
+
+---
+
+## Cyberhunk 2088
+
+### `cyberhunk2088-cover.webp` (600 × 900, portrait)
+
+Original sci-fi game cover art, portrait 2:3, stylized semi-realistic digital painting. A confident young man seen from the chest up, three-quarter view, undercut hair swept to one side, a sleek wraparound visor glowing cyan over his eyes, a black high-collar techwear jacket with thin hot-pink light seams. Behind him a dense night megacity with glowing windows and holographic signs, under a deep teal and purple sky (no yellow). At the top, the title "CYBERHUNK 2088" in rounded, upright chrome letters with a hot-pink neon-tube outline and a slight 3D bevel. No glitch effect, no slanted or split letters, no yellow.
+
+### `cyberhunk2088-hero.webp` (1920 × 620, wide)
+
+Wide cinematic banner, 1920×620, stylized semi-realistic digital painting, no text anywhere. The same man in a black high-collar jacket stands on a rain-soaked rooftop on the right third, looking out over a neon night megacity with holographic billboards and flying cars, deep teal and purple light with hot-pink accents. Dark open sky on the left for a logo.
+
+### `cyberhunk2088-logo.png` (800 × 260, transparent)
+
+Logo text "CYBERHUNK 2088" alone on a transparent background. Rounded, upright chrome letters with a hot-pink neon-tube outline and a slight 3D bevel, "2088" a little smaller on the right. No glitch effect, no slanted or split letters, no yellow. Nothing else in the picture.

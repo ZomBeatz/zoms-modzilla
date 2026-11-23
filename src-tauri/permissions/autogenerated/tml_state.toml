@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tml-state"
+description = "Enables the tml_state command without any pre-configured scope."
+commands.allow = ["tml_state"]
+
+[[permission]]
+identifier = "deny-tml-state"
+description = "Denies the tml_state command without any pre-configured scope."
+commands.deny = ["tml_state"]

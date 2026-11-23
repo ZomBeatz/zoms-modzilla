@@ -72,15 +72,23 @@ export interface ToastMsg {
 
 export function Toast({ toast, onDone }: { toast: ToastMsg | null; onDone: () => void }) {
   const timer = useRef<number | undefined>(undefined);
+  // The latest onDone, so a redraw (several a second while downloading) never restarts the clock.
+  const done = useRef(onDone);
+  done.current = onDone;
+  // Long enough to read: about a second per 15 characters, 2.5 to 6 seconds.
+  const ms = toast ? Math.min(6000, Math.max(2500, toast.text.length * 65)) + (toast.action ? 1500 : 0) : 0;
+  const start = () => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => done.current(), ms);
+  };
   useEffect(() => {
     if (!toast) return;
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(onDone, toast.action ? 6000 : 3500);
+    start();
     return () => window.clearTimeout(timer.current);
-  }, [toast, onDone]);
+  }, [toast?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!toast) return null;
   return (
-    <div className="toast" role="status" key={toast.id}>
+    <div className="toast" role="status" key={toast.id} onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={start}>
       <span>{toast.text}</span>
       {toast.action && (
         <button
@@ -162,6 +170,41 @@ export function DiskBar({ free, total, label }: { free?: number | null; total?: 
       <span className="disk-text num">
         {bytes(free)} free{total ? ` of ${bytes(total)}` : ""}
         {label ? ` · ${label}` : ""}
+      </span>
+    </div>
+  );
+}
+
+/** One drive, split into what fills it: unpacked mods, mod archives, Steam games, everything
+ * else, and free space. */
+export function SpaceBar({ d }: { d: { holds: string[]; total: number; free: number; mods: number; archives: number; steam: number } }) {
+  if (!d.total) return null;
+  const used = d.total - d.free;
+  const other = Math.max(0, used - d.mods - d.archives - d.steam);
+  const parts = [
+    { k: "mods", label: "Mods", v: d.mods },
+    { k: "zips", label: "Zips", v: d.archives },
+    { k: "steam", label: "Steam", v: d.steam },
+    { k: "other", label: "Other", v: other },
+  ].filter((p) => p.v > 0);
+  const low = d.free / d.total < 0.1;
+  return (
+    <div className={`disk space${low ? " low" : ""}`}>
+      <span className="disk-text num">
+        <b>{d.holds.join(" and ")}</b> · {bytes(d.free)} free of {bytes(d.total)}
+      </span>
+      <div className="space-bar" role="img" aria-label={`${parts.map((p) => `${p.label} ${bytes(p.v)}`).join(", ")}, ${bytes(d.free)} free`}>
+        {parts.map((p) => (
+          <span key={p.k} className={`seg-${p.k}`} style={{ width: `${(p.v / d.total) * 100}%` }} title={`${p.label}: ${bytes(p.v)}`} />
+        ))}
+      </div>
+      <span className="space-key">
+        {parts.map((p) => (
+          <span key={p.k} title={bytes(p.v)}>
+            <i className={`seg-${p.k}`} />
+            {p.label} {bytes(p.v)}
+          </span>
+        ))}
       </span>
     </div>
   );

@@ -1,11 +1,11 @@
 fn main() {
     // Every command the app's page can call. Listing them gives each one a permission of its own,
     // and the window gets exactly these (capabilities/default.json).
-    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&COMMANDS)))
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)))
         .expect("failed to run the Tauri build script");
 }
 
-const COMMANDS: [&str; 135] = [
+const COMMANDS: &[&str] = &[
     "get_overview",
     "save_settings",
     "set_api_key",
@@ -141,4 +141,22 @@ const COMMANDS: [&str; 135] = [
     "loot_sort",
     "loot_apply",
     "app_update",
+    "remote_start",
+    "remote_stop",
+    "loader_offers",
+    "loader_install",
+    "nexus_marks",
+    "mod_endorse",
+    "mod_track",
+    "mod_contents",
+    "mod_file_read",
+    "extender_info",
+    "extender_set",
+    "prefix_status",
+    "prefix_install",
+    "tools_list",
+    "tool_save",
+    "tool_delete",
+    "tool_run",
+    "tool_keep",
 ];

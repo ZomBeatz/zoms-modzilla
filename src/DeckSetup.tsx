@@ -1,6 +1,7 @@
 // The first time Zom's Nexus opens on a Steam Deck: everything that makes it feel at home there,
 // in one place. Shown once (Settings › Steam Deck can show it again).
 
+import { PhoneSendButton } from "./PhoneSend";
 import { useEffect, useState } from "react";
 import { Check, Gamepad2 } from "lucide-react";
 import { api, on, type Game } from "./api";
@@ -111,9 +112,12 @@ export function DeckSetup({ games, hasKey, toast, goSettings, reloadGames }: { g
               <Check size={14} /> Signed in.
             </span>
           ) : (
-            <button className="btn sm" onClick={() => { setOpen(false); goSettings(); }}>
-              Sign in
-            </button>
+            <>
+              <PhoneSendButton className="btn sm primary" label="Sign in with your phone" />{" "}
+              <button className="btn sm ghost" onClick={() => { setOpen(false); goSettings(); }}>
+                Type it in Settings
+              </button>
+            </>
           )}
           <div className="muted small">Typing: choosing a text box opens Steam's keyboard (STEAM + X any time).</div>
         </li>

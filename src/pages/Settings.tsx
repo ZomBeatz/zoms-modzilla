@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PhoneSendButton } from "../PhoneSend";
 import { AlertCircle, Check, CheckCircle2, Copy, FileDown, FileUp, FolderOpen, ScrollText, ExternalLink, Eye, EyeOff, KeyRound, Link2, MonitorCheck } from "lucide-react";
 import { getDevice, readUi, saveUi } from "../deck";
 import { AddToSteam } from "./AddToSteam";
@@ -129,6 +130,8 @@ function ApiKey({ overview, setOverview, toast }: Ctx) {
           >
             Open the API keys page <ExternalLink size={11} />
           </a>
+          {" · "}
+          Hard to type here? <PhoneSendButton className="btn sm ghost" label="Paste it on your phone" />
         </span>
         {error && <span className="err">{error}</span>}
       </label>
@@ -578,7 +581,7 @@ export function SettingsPage(ctx: Ctx) {
       toast((e as Error).message);
     }
   };
-  const toggle = (label: string, hint: string, key: "extract" | "keepArchives" | "autoRetry" | "startWithComputer" | "verifyDownloads" | "retryLater" | "startHidden", disabled = false) => (
+  const toggle = (label: string, hint: string, key: "extract" | "keepArchives" | "autoRetry" | "startWithComputer" | "verifyDownloads" | "retryLater" | "startHidden" | "unpackOnPower", disabled = false) => (
     <label className="setting" style={{ cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 }}>
       <input type="checkbox" checked={!!s[key]} disabled={disabled} onChange={(e) => save({ [key]: e.target.checked })} style={{ marginTop: 3 }} />
       <span className="what">
@@ -661,6 +664,21 @@ export function SettingsPage(ctx: Ctx) {
               <option value="pause">Pause downloads</option>
             </select>
           </div>
+          <div className="setting">
+            <span className="what">
+              <b>On battery</b>
+              <span>For laptops and handhelds like the Steam Deck. New downloads wait while the battery is below this, until you plug in.</span>
+            </span>
+            <select value={s.batteryFloor ?? 0} onChange={(e) => save({ batteryFloor: Number(e.target.value) })} aria-label="Battery floor for downloads">
+              <option value={0}>Download at any charge</option>
+              {[10, 20, 30, 50].map((n) => (
+                <option key={n} value={n}>
+                  Wait below {n}%
+                </option>
+              ))}
+            </select>
+          </div>
+          {toggle("Unpack on the charger", "On battery, finished downloads stay packed until a profile needs them (or you press Unpack). Unpacking big mods uses a lot of power.", "unpackOnPower")}
           <div className="setting">
             <span className="what">
               <b>Another speed limit for some hours</b>

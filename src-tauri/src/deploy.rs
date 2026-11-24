@@ -544,6 +544,8 @@ pub fn apply(data: &Path, t: &Target, profile: &Profile, mods: &[StoredMod]) -> 
             }
         }
     }
+    // Steam's Play button starts the script extender, when that's on for the game.
+    crate::extenders::swap_in(data, t.game, t.root, &mut want);
     // Files already right stay; only what changed comes out and goes in.
     let keep: HashMap<String, PathBuf> = want.iter().map(|(r, f)| (r.to_lowercase(), f.clone())).collect();
     let left = clear_keeping(data, t.game, t.root, &keep)?;
@@ -713,6 +715,35 @@ mod tests {
         assert_eq!(fs::read_to_string(&plugins).unwrap(), "*Existing.esp\r\n");
         // The library's own copies are untouched.
         assert_eq!(fs::read_to_string(lib.join("skyrimspecialedition/2 - Mod 2/unpacked/textures/sky.dds")).unwrap(), "mod2");
+    }
+
+    #[test]
+    fn steam_starts_the_script_extender_and_clear_puts_the_launcher_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (data, lib, game) = (tmp.path().join("data"), tmp.path().join("lib"), tmp.path().join("game"));
+        fs::create_dir_all(&game).unwrap();
+        fs::write(game.join("SkyrimSELauncher.exe"), "launcher").unwrap();
+        let skse = lib_mod(&lib, 1, &[("skse64_2_02/skse64_loader.exe", "loader"), ("skse64_2_02/Data/Scripts/a.pex", "s")]);
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: None, copy: false };
+        apply(&data, &t, &profile(&[1]), std::slice::from_ref(&skse)).unwrap();
+        assert_eq!(fs::read_to_string(game.join("SkyrimSELauncher.exe")).unwrap(), "launcher", "off by default");
+        crate::extenders::set(&data, "skyrimspecialedition", true).unwrap();
+        apply(&data, &t, &profile(&[1]), std::slice::from_ref(&skse)).unwrap();
+        assert_eq!(fs::read_to_string(game.join("SkyrimSELauncher.exe")).unwrap(), "loader");
+        assert!(crate::extenders::info(&data, "skyrimspecialedition", &game).unwrap().swapped);
+        // Switched off: the next time the profile goes in, the launcher is back.
+        crate::extenders::set(&data, "skyrimspecialedition", false).unwrap();
+        apply(&data, &t, &profile(&[1]), std::slice::from_ref(&skse)).unwrap();
+        assert_eq!(fs::read_to_string(game.join("SkyrimSELauncher.exe")).unwrap(), "launcher");
+        // A loader put in by hand works too, and Clear puts the launcher back.
+        crate::extenders::set(&data, "skyrimspecialedition", true).unwrap();
+        clear(&data, "skyrimspecialedition", &game).unwrap();
+        fs::write(game.join("skse64_loader.exe"), "by hand").unwrap();
+        apply(&data, &t, &profile(&[]), &[]).unwrap();
+        assert_eq!(fs::read_to_string(game.join("SkyrimSELauncher.exe")).unwrap(), "by hand");
+        clear(&data, "skyrimspecialedition", &game).unwrap();
+        assert_eq!(fs::read_to_string(game.join("SkyrimSELauncher.exe")).unwrap(), "launcher");
+        assert!(game.join("skse64_loader.exe").exists(), "the game's own files stay");
     }
 
     #[test]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mod-track"
+description = "Enables the mod_track command without any pre-configured scope."
+commands.allow = ["mod_track"]
+
+[[permission]]
+identifier = "deny-mod-track"
+description = "Denies the mod_track command without any pre-configured scope."
+commands.deny = ["mod_track"]

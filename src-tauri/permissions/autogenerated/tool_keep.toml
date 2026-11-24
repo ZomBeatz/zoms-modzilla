@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tool-keep"
+description = "Enables the tool_keep command without any pre-configured scope."
+commands.allow = ["tool_keep"]
+
+[[permission]]
+identifier = "deny-tool-keep"
+description = "Denies the tool_keep command without any pre-configured scope."
+commands.deny = ["tool_keep"]

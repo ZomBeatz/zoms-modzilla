@@ -101,6 +101,11 @@ pub struct Settings {
     pub snapshot_before_play: bool,
     /// Optional AI help: which service and model (the key is kept apart, in `ai-key`).
     pub ai: Option<crate::ai::AiSettings>,
+    /// On battery, new downloads wait below this charge (percent; 0 = never).
+    pub battery_floor: u8,
+    /// On battery, finished downloads are unpacked later (when a profile needs them, or from
+    /// the Library) instead of right away.
+    pub unpack_on_power: bool,
     /// Activity kinds not to note ("played", "updates"...).
     pub activity_off: Vec<String>,
     /// Which defaults this file was written with; missing means the first ones.
@@ -143,6 +148,8 @@ impl Default for Settings {
             game_libraries: Default::default(),
             ai: None,
             snapshot_before_play: false,
+            battery_floor: 0,
+            unpack_on_power: false,
             check_app_updates: true,
             version: VERSION,
         }

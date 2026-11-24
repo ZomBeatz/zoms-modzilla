@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tool-save"
+description = "Enables the tool_save command without any pre-configured scope."
+commands.allow = ["tool_save"]
+
+[[permission]]
+identifier = "deny-tool-save"
+description = "Denies the tool_save command without any pre-configured scope."
+commands.deny = ["tool_save"]

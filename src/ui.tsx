@@ -144,7 +144,7 @@ export function StatusPill({ status }: { status: Status }) {
 export function Wordmark() {
   return (
     <div className="brand">
-      <img src="/app-icon.svg" width={36} height={36} alt="" />
+      <img src={`${import.meta.env.BASE_URL}app-icon.svg`} width={36} height={36} alt="" />
       <div className="brand-text">
         <div className="brand-name">
           <span>Zom's</span> Nexus

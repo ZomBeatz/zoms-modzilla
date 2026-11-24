@@ -1,6 +1,7 @@
 import { GoneList } from "./GoneGames";
 import { useEffect, useState } from "react";
-import { Compass, ExternalLink, FolderOpen, Gamepad2, Info, Layers, Package, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Compass, ExternalLink, FolderOpen, Gamepad2, Info, Layers, Package, Pencil, Play, Plus, Trash2, Wrench } from "lucide-react";
+import { GameTools } from "./GameTools";
 import { TmlPanel } from "./TmlPanel";
 import { api, playWithoutMods, isDesktop, modFolderHelp, openUrl, pickFolder, type Game, type GameState, type StoredMod } from "../api";
 import { usePlayLabel } from "../GameStatus";
@@ -147,11 +148,12 @@ export function sameDriveFolder(gamePath: string): string | null {
   return parent ? `${parent}/Zom's Nexus mods` : null;
 }
 
-export function Games({ toast, go, libraryVersion, reloadGames, gameStates }: Ctx) {
+export function Games({ toast, go, libraryVersion, reloadGames, gameStates, openAdd }: Ctx) {
   const [games, setGames] = useState<Game[] | null>(null);
   const [mods, setMods] = useState<StoredMod[]>([]);
   const [editing, setEditing] = useState<{ game?: Game; focus?: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [tooling, setTooling] = useState<Game | null>(null);
   const load = () => {
     api.games().then(setGames, (e) => toast((e as Error).message));
     reloadGames();
@@ -261,6 +263,9 @@ export function Games({ toast, go, libraryVersion, reloadGames, gameStates }: Ct
                       <FolderOpen size={15} />
                     </button>
                   )}
+                  <button className="icon-btn" title="Game tools: script extender, Proton prefix, modding tools, loaders" aria-label="Game tools" onClick={() => setTooling(g)}>
+                    <Wrench size={15} />
+                  </button>
                   <button className="icon-btn" title="Folders and start command" aria-label="Edit game" onClick={() => setEditing({ game: g })}>
                     <Pencil size={15} />
                   </button>
@@ -289,6 +294,7 @@ export function Games({ toast, go, libraryVersion, reloadGames, gameStates }: Ct
           }}
         />
       )}
+      {tooling && <GameTools game={tooling} toast={toast} openAdd={openAdd} onClose={() => (setTooling(null), load())} />}
       {editing && <GameDialog game={editing.game} focusModFolder={editing.focus} onClose={() => setEditing(null)} onSaved={load} />}
     </div>
   );

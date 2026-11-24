@@ -5,6 +5,8 @@ import fs from "node:fs";
 
 export default defineConfig({
   plugins: [react()],
+  // The online demo lives under the repository's name on GitHub Pages.
+  base: process.env.NEXUS_BASE ?? "/",
   // Shown in Settings > About.
   define: { __APP_VERSION__: JSON.stringify(JSON.parse(fs.readFileSync("package.json", "utf8")).version) },
   clearScreen: false,

@@ -102,12 +102,20 @@ export function move(dir: Dir) {
   if (i >= 0) show(others[i]);
 }
 
+/** Steam's on-screen keyboard, at most once a second and a half (A and a tap can both ask). */
+let keyboardAt = 0;
+export function steamKeyboard() {
+  if (Date.now() - keyboardAt < 1500) return;
+  keyboardAt = Date.now();
+  void api.openSteam("keyboard").catch(() => {});
+}
+
 /** A: press what has the focus. A text box gets Steam's keyboard on a Deck. */
 async function press() {
   const el = document.activeElement as HTMLElement | null;
   if (!el || el === document.body) return start();
   if (typing(el)) {
-    if ((await getDevice()).deck || (await getDevice()).gameMode) void api.openSteam("keyboard").catch(() => {});
+    if ((await getDevice()).deck || (await getDevice()).gameMode) steamKeyboard();
     return;
   }
   if (el instanceof HTMLSelectElement) {
@@ -297,4 +305,11 @@ export function startPad() {
   const quiet = () => document.documentElement.classList.remove("pad", "pad-controller");
   window.addEventListener("mousedown", quiet);
   window.addEventListener("touchstart", quiet, { passive: true });
+  // In Game Mode there's no keyboard: tapping a text box (or clicking it with a trackpad) brings
+  // up Steam's.
+  window.addEventListener("pointerup", (e) => {
+    const t = e.target as Element | null;
+    if (!typing(t)) return;
+    void getDevice().then((d) => d.gameMode && steamKeyboard());
+  });
 }

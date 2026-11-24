@@ -13,7 +13,7 @@ use std::{
 };
 
 /// DLL names mod loaders stand in for.
-const PROXIES: &[&str] = &["winmm", "version", "dxgi", "d3d11", "d3d9", "dinput8", "xinput1_3", "xinput1_4", "dsound", "winhttp", "bink2w64"];
+const PROXIES: &[&str] = &["winmm", "version", "dxgi", "d3d11", "d3d9", "dinput8", "xinput1_3", "xinput1_4", "dsound", "winhttp", "bink2w64", "dwmapi", "opengl32"];
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -1,0 +1,11 @@
+{
+  "name": "Zom's Nexus",
+  "author": "ZomBeatz Media",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["mods", "modding", "nexus mods"],
+    "description": "Switch Zom's Nexus mod profiles, or play without mods, from the quick access menu.",
+    "image": "https://raw.githubusercontent.com/ZomBeatz/zoms-nexus/main/src-tauri/steam-art/wide.png"
+  }
+}

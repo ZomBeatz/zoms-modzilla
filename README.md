@@ -10,6 +10,12 @@
   A free mod manager for Linux and the Steam Deck: Nexus Mods and Thunderstore, collections, profiles per game with a conflict check, troubleshooting, and Play.
 </p>
 
+<p align="center">
+  <a href="https://github.com/ZomBeatz/zoms-nexus/releases/latest">Download</a> ·
+  <a href="https://zombeatz.github.io/zoms-nexus/">Try the online demo</a> ·
+  <a href="https://docs.zombeatzmedia.com/nexus/">Guide</a>
+</p>
+
 ## Quick start
 
 1. **Install it.** Download the file for your Linux from the latest release:
@@ -67,7 +73,11 @@ On some NVIDIA setups the window can stay white. Zom's Nexus already turns off t
 | **Each profile's own settings** | Mods' settings files (.ini, .cfg, .json …) are kept per profile, with an editor that turns them into switches and boxes. |
 | **When a game won't start** | Notices a game that closes right after starting and shows what changed since it last ran fine; reads mod loaders' logs (SMAPI, script extenders, BepInEx, MelonLoader, UE4SS, REFramework, Cyber Engine Tweaks, RED4ext) and names the mod at fault; warns before Play when the same crash is coming; finds loaders a profile needs but doesn't have, mods packed a folder too deep, and the Proton launch options mod loaders need. **Play without mods** and **Find the problem mod** narrow it down. |
 | **Ask AI (optional)** | Bring any AI service (Claude, OpenAI, Gemini, OpenRouter, or one on your own computer like Ollama): it gets the check, the logs and the last runs, with your home folder and names taken out, and only when you press Send. Answers stream in, and its suggestions (switch off a mod, find the problem mod) are buttons you choose to press. |
-| **Steam Deck** | A first-run setup on the Deck; **Add to Steam** puts it in your library with artwork, so Game Mode opens it full screen; the controller moves between buttons (A, B, Y, L1/R1), text boxes open Steam's keyboard, and mods on an SD card stay on the card. |
+| **Steam Deck** | A first-run setup on the Deck; **Add to Steam** puts it in your library with artwork, so Game Mode opens it full screen; the controller moves between buttons (A, B, Y, L1/R1), text boxes open Steam's keyboard (tap or A), F1–F4 for the back buttons, and mods on an SD card stay on the card. Downloads carry on after sleep, and can wait for the charger. A **Help** page answers the usual Deck questions. |
+| **Send from your phone** | Scan a QR code to paste your API key or a Mod manager download link on your phone instead of typing it with a controller. The page only listens while its dialog is open, and needs the code in the QR code. |
+| **Game tools** | Per game: **Steam's Play starts SKSE** (F4SE, NVSE, FOSE, OBSE too) so script extenders work from Game Mode; Visual C++, .NET and DirectX parts in the Proton prefix with Protontricks; xEdit, BodySlide, Nemesis, Pandora and DynDOLOD run in the prefix, with what they make kept as a mod; UE4SS and ReShade in one click. |
+| **Look inside a mod** | Its files, which ones lose to a later mod in the profile, its pictures and readmes. Endorse and track mods on Nexus Mods from the Library. |
+| **Quick access menu** | A Decky Loader plugin (`packaging/decky`) lists your profiles in the Steam Deck's **…** menu: switch a game's profile or take its mods out without leaving Game Mode. |
 | **More launchers** | Games from Heroic (GOG, Epic, Amazon) and Lutris as well as Steam; shows which Proton each runs with. Terraria's tModLoader mods and mod packs too. |
 | **LOOT sorting** | Bethesda games' plugins sorted by LOOT's community masterlist, with its notes (incompatibilities, missing requirements, plugins that need cleaning). Kept per profile, apart from the mod order. |
 | **Baldur's Gate 3** | .pak mods go in the game's Mods folder and on its mod list (modsettings.lsx), in the profile's order; Script Extender and loose files go in the game folder. |

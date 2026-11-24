@@ -41,7 +41,7 @@ function placeholder(key: string, title: string, kind: "cover" | "hero" | "logo"
 /** A picture in public/demo-art/ (named like "cyberhunk2088-cover.webp"), if one is there. */
 async function demoArt(name: string): Promise<string | null> {
   for (const ext of ["webp", "jpg", "png"]) {
-    const url = `/demo-art/${name}.${ext}`;
+    const url = `${import.meta.env.BASE_URL}demo-art/${name}.${ext}`;
     try {
       const r = await fetch(url, { method: "HEAD" });
       if (r.ok && (r.headers.get("content-type") ?? "").startsWith("image/")) return url;
@@ -425,6 +425,10 @@ function demoLayers(p: Profile) {
 }
 let demoSteamAdded = false;
 let demoSnaps = [{ game: "frostrim", id: "1700000000", at: Math.floor(Date.now() / 1000) - 86400, label: "Before trying Snowy North", owner: "shared", files: 24, size: 96_000_000, auto: false }];
+let demoExtender = false;
+let demoVerbs: string[] = ["corefonts"];
+let demoTools: { id: string; game: string; name: string; exe: string; args: string[] }[] = [{ id: "t1", game: "frostrim", name: "FrostEdit", exe: "/home/alex/Tools/FrostEdit/FrostEdit.exe", args: [] }];
+const demoMarks: { endorsed: [string, number][]; tracked: [string, number][] } = { endorsed: [], tracked: [] };
 let demoAi: { provider: string; model: string; baseUrl?: string } | null = null;
 
 // A made-up tModLoader with Workshop mods.
@@ -980,7 +984,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       return r;
     }
     case "app_update":
-      return { release: null, flatpak: false, version: "0.1.0" };
+      return { release: null, flatpak: false, version: "0.0.1" };
     case "loot_sort":
       return { now: ["Pine Forest.esp", "Frostrim Patch.esp", "Quiet Footsteps.esp"], sorted: { order: ["Frostrim Patch.esp", "Pine Forest.esp", "Quiet Footsteps.esp"], changed: true, unknown: 1, notes: [{ plugin: "Frostrim Patch.esp", kind: "warn", text: "Needs cleaning: 12 identical-to-master records. Clean it with FrostEdit (Quick Auto Clean)." }, { plugin: "Quiet Footsteps.esp", kind: "say", text: "Use the patch for Pine Forest too." }] } };
     case "loot_apply":
@@ -1010,6 +1014,77 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       await new Promise((r) => setTimeout(r, 700));
       return "The most likely cause is Quiet Footsteps: SKSE's log says its plugin was made for another version of the game, and the game started closing right after you updated it.\n\n1. Switch off Quiet Footsteps.\n2. Press Play. If the game starts, look for a newer Quiet Footsteps on its page (Update in the check).\n3. If it still closes, use Find the problem mod.\n\n```actions\n[{\"do\": \"switchOff\", \"mod\": \"Quiet Footsteps\"}, {\"do\": \"findProblem\"}]\n```";
     case "open_steam":
+      return null;
+    case "extender_info":
+      return a.game === "frostrim" ? { name: "FKSE", loader: "fkse64_loader.exe", launcher: "FrostrimLauncher.exe", on: demoExtender, installed: true, swapped: demoExtender } : null;
+    case "extender_set":
+      demoExtender = !!a.on;
+      return { name: "FKSE", loader: "fkse64_loader.exe", launcher: "FrostrimLauncher.exe", on: demoExtender, installed: true, swapped: demoExtender };
+    case "prefix_status":
+      return {
+        via: "protontricksFlatpak",
+        steam: true,
+        hasPrefix: true,
+        installed: demoVerbs,
+        verbs: [
+          { verb: "vcrun2022", name: "Visual C++ 2015–2022", wantedBy: "Script extender plugins, most DLL mods" },
+          { verb: "dotnet48", name: ".NET Framework 4.8", wantedBy: "Many modding tools" },
+          { verb: "d3dcompiler_47", name: "DirectX shader compiler", wantedBy: "ReShade, ENB, some UI mods" },
+          { verb: "corefonts", name: "Windows fonts", wantedBy: "Tools whose text shows as boxes" },
+        ],
+        suggested: demoVerbs.includes("vcrun2022") ? [] : ["vcrun2022"],
+        flatpak: false,
+        deck: true,
+      };
+    case "prefix_install":
+      await new Promise((r) => setTimeout(r, 1500));
+      demoVerbs = [...demoVerbs, String(a.verb)];
+      return `Executing w_do_call ${a.verb}\n${a.verb} installed.`;
+    case "tools_list":
+      return demoTools.filter((t) => t.game === a.game);
+    case "tool_save": {
+      const t = a.tool as (typeof demoTools)[number];
+      const saved = { ...t, id: t.id || `t${Date.now()}`, name: t.name || "FrostEdit" };
+      demoTools = [...demoTools.filter((x) => x.id !== saved.id), saved];
+      return saved;
+    }
+    case "tool_delete":
+      demoTools = demoTools.filter((t) => t.id !== a.id);
+      return null;
+    case "tool_run": {
+      const t = demoTools.find((x) => x.id === a.id);
+      setTimeout(() => emit("tool:done", { id: a.id, game: t?.game, name: t?.name, ok: true, made: ["meshes/actors/character/behaviors/0_master.hkx", "meshes/actors/character/behaviors/mt_behavior.hkx"] }), 2500);
+      return null;
+    }
+    case "tool_keep":
+      return { game: a.game, modId: 1_000_000_000_999, name: a.name || "Tool output", local: true, files: [], folder: "" };
+    case "loader_offers":
+      return a.game === "cyberhunk2088" ? [{ id: "reshade-dxgi", name: "ReShade (DirectX 10–12)", what: "Post-processing shaders: colour, sharpening, ambient occlusion.", dll: "dxgi" }] : [{ id: "ue4ss", name: "UE4SS", what: "Lua and Blueprint mods for Unreal Engine games.", dll: "dwmapi" }, { id: "reshade-dxgi", name: "ReShade (DirectX 10–12)", what: "Post-processing shaders.", dll: "dxgi" }];
+    case "loader_install":
+      await new Promise((r) => setTimeout(r, 1200));
+      return { game: a.game, modId: 1_000_000_000_998, name: a.id === "ue4ss" ? "UE4SS v3.0.1" : "ReShade (6.4.1)", local: true, files: [], folder: "" };
+    case "nexus_marks":
+      return demoMarks;
+    case "mod_endorse":
+      demoMarks.endorsed = demoMarks.endorsed.filter((x) => !(x[0] === a.game && x[1] === a.modId));
+      if (a.on) demoMarks.endorsed.push([String(a.game), Number(a.modId)]);
+      return null;
+    case "mod_track":
+      demoMarks.tracked = demoMarks.tracked.filter((x) => !(x[0] === a.game && x[1] === a.modId));
+      if (a.on) demoMarks.tracked.push([String(a.game), Number(a.modId)]);
+      return null;
+    case "mod_contents":
+      return [
+        { path: "Data/readme.txt", size: 1200, kind: "text", lostTo: null },
+        { path: "Data/preview.png", size: 48000, kind: "image", lostTo: null },
+        { path: "Data/textures/sky.dds", size: 2_400_000, kind: "other", lostTo: "Pine Forest" },
+        { path: "Data/Quiet Footsteps.esp", size: 3400, kind: "other", lostTo: null },
+      ];
+    case "mod_file_read":
+      return String(a.path).endsWith(".png") ? { image: placeholder("frostrim", "Preview", "mod"), cut: false } : { text: "Quiet Footsteps\n===============\n\nMakes footsteps on snow quieter.\nNeeds FKSE.", cut: false };
+    case "remote_start":
+      return { url: "http://192.168.1.20:41234/?t=demo", width: 21, cells: Array.from({ length: 441 }, (_, i) => ((i * 7919) % 11) < 5) };
+    case "remote_stop":
       return null;
     case "steam_entry":
       return { added: demoSteamAdded, steamRunning: true, program: "/home/alex/Applications/Zoms-Nexus.AppImage", appImage: true, dev: false, hasSteam: true };

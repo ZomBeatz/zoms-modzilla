@@ -41,7 +41,7 @@
     <mediatype>x-scheme-handler/nxm</mediatype>
   </provides>
   <releases>
-    <release version="0.1.0" date="2026-11-23">
+    <release version="0.0.1" date="2026-11-23">
       <description>
         <p>First release.</p>
       </description>

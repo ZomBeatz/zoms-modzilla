@@ -6,7 +6,7 @@ and npm dependencies are listed ahead of time.
 
 ## Before each release
 
-1. Tag the release in `ZomBeatz/zoms-nexus` (`v0.1.0`) and set the same `tag:` in the manifest.
+1. Tag the release in `ZomBeatz/zoms-nexus` (`v0.0.1`) and set the same `tag:` in the manifest.
 2. Add the release to `<releases>` in the metainfo.
 3. Make the offline dependency lists (from [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)):
 

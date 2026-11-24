@@ -184,6 +184,19 @@ impl Queue {
 
     /// Start the loop that hands out slots. Call once, from inside the async runtime.
     pub fn start(&self) {
+        // Downloads cut off by sleep start again on waking, from where they stopped.
+        let q = self.clone();
+        std::thread::spawn(move || {
+            let mut asleep = crate::power::slept();
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+                let now = crate::power::slept();
+                if now - asleep > 3.0 {
+                    q.after_wake();
+                }
+                asleep = now;
+            }
+        });
         let q = self.clone();
         tauri::async_runtime::spawn(async move {
             loop {
@@ -212,6 +225,9 @@ impl Queue {
         let s = self.settings.lock().unwrap().clone();
         if !s.may_start(crate::log::hour_now()) {
             return Some(format!("Downloads start between {}:00 and {}:00 (Settings).", s.hours_from, s.hours_to));
+        }
+        if let Some(cap) = crate::power::low(s.battery_floor) {
+            return Some(format!("The battery is at {cap}%, so new downloads wait for the charger or {}% (Settings).", s.battery_floor));
         }
         if s.while_playing != "carry" && game_running() {
             return Some("A game is running, so downloads wait until it closes (Settings).".into());
@@ -373,6 +389,23 @@ impl Queue {
         if let Some(h) = self.state.lock().unwrap().tasks.remove(id) {
             h.abort();
         }
+    }
+
+    /// After sleep: the connections are gone, so running downloads start again now (from their
+    /// .part file) instead of waiting for a timeout and using up a retry.
+    pub fn after_wake(&self) {
+        let ids: Vec<String> = self.state.lock().unwrap().jobs.iter().filter(|j| matches!(j.status, Status::Starting | Status::Downloading)).map(|j| j.id.clone()).collect();
+        for id in &ids {
+            self.stop_task(id);
+            self.update(id, |j| {
+                j.status = Status::Queued;
+                j.speed = 0;
+            });
+        }
+        if !ids.is_empty() {
+            crate::log::info(&format!("Woke from sleep: {} download(s) carry on", ids.len()));
+        }
+        self.poke();
     }
 
     pub fn pause(&self, id: &str) {
@@ -779,7 +812,7 @@ impl Queue {
         }
         let (lib, unpack, keep) = {
             let s = self.settings.lock().unwrap();
-            (s.library(), s.extract, s.keep_archives)
+            (s.library(), s.extract && !(s.unpack_on_power && crate::power::on_battery()), s.keep_archives)
         };
         let game = job.game.clone();
         let verify = self.settings.lock().unwrap().verify_downloads;

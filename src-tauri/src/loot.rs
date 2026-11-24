@@ -151,13 +151,12 @@ fn condition(c: &str, have: &dyn Fn(&str) -> bool, active: &dyn Fn(&str) -> bool
                 return None;
             }
             have(&a)
-        } else if let Some(a) = arg("active(") {
+        } else {
+            let a = arg("active(")?;
             if a.contains(['*', '\\', '|']) {
                 return None;
             }
             active(&a)
-        } else {
-            return None;
         };
         all &= v != neg;
     }

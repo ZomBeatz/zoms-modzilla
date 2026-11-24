@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mod-endorse"
+description = "Enables the mod_endorse command without any pre-configured scope."
+commands.allow = ["mod_endorse"]
+
+[[permission]]
+identifier = "deny-mod-endorse"
+description = "Denies the mod_endorse command without any pre-configured scope."
+commands.deny = ["mod_endorse"]

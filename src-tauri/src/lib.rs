@@ -23,6 +23,7 @@ mod check;
 mod collections;
 mod deploy;
 mod disk;
+mod extenders;
 mod gamelogs;
 mod gone;
 mod fomod;
@@ -34,6 +35,7 @@ mod launchers;
 mod launchopts;
 mod layers;
 mod library;
+mod loaderkit;
 mod loaders;
 mod loot;
 mod log;
@@ -45,8 +47,11 @@ mod runs;
 mod nexus;
 mod nxm;
 mod order;
+mod power;
+mod prefix;
 mod profiles;
 mod queue;
+mod remote;
 mod release;
 mod requirements;
 mod saves;
@@ -160,6 +165,10 @@ fn save_settings(app: State<'_, App>, settings: Settings) -> Res<Overview> {
 
 #[tauri::command]
 async fn set_api_key(app: State<'_, App>, key: String) -> Res<Overview> {
+    use_key(&app, key).await
+}
+
+async fn use_key(app: &App, key: String) -> Res<Overview> {
     let key = key.trim().to_string();
     if key.is_empty() {
         return Err("Paste your API key from nexusmods.com > Settings > API keys.".into());
@@ -171,7 +180,7 @@ async fn set_api_key(app: State<'_, App>, key: String) -> Res<Overview> {
     app.nexus.set_key(Some(key));
     *app.nexus.limits.lock().unwrap() = test.limits.lock().unwrap().clone();
     app.set_user(Some(user));
-    Ok(overview(&app))
+    Ok(overview(app))
 }
 
 #[tauri::command]
@@ -3309,6 +3318,563 @@ fn install_icon() {
     }
 }
 
+// ---- Script extenders from Steam, the game's prefix, and tools run in it ----
+
+#[tauri::command]
+fn extender_info(app: State<'_, App>, game: String) -> Option<extenders::Extender> {
+    let root = list_games(&app).into_iter().find(|g| g.domain == game)?.path.map(PathBuf::from)?;
+    extenders::info(&app.data_dir, &game, &root)
+}
+
+/// Switch "Steam starts the script extender" on or off; the profile in the game goes in again.
+#[tauri::command]
+async fn extender_set(app: State<'_, App>, game: String, on: bool) -> Res<Option<extenders::Extender>> {
+    extenders::set(&app.data_dir, &game, on)?;
+    let (root, ..) = game_target(&app, &game)?;
+    if activity::running(&root) {
+        return Err("The game is running: close it first.".into());
+    }
+    let active = deploy::deployed(&app.data_dir, &game).profile_id;
+    if let Some(id) = active.filter(|id| find_profile(&app, id).is_ok()) {
+        apply_profile(&app, &id).await?;
+    }
+    log::info(&format!("{game}: Steam starts the script extender: {on}"));
+    Ok(extenders::info(&app.data_dir, &game, &root))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrefixVerb {
+    verb: &'static str,
+    name: &'static str,
+    wanted_by: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrefixStatus {
+    /// How the prefix is reached (None: Protontricks or winetricks isn't installed).
+    via: Option<prefix::Via>,
+    steam: bool,
+    has_prefix: bool,
+    installed: Vec<String>,
+    verbs: Vec<PrefixVerb>,
+    /// What the loaders' logs say is missing.
+    suggested: Vec<&'static str>,
+    flatpak: bool,
+    deck: bool,
+}
+
+#[tauri::command]
+async fn prefix_status(app: State<'_, App>, game: String) -> Res<PrefixStatus> {
+    let g = list_games(&app).into_iter().find(|g| g.domain == game).ok_or("That game isn't on the Games page.")?;
+    tokio::task::spawn_blocking(move || {
+        let pfx = g.proton_prefix.as_deref().map(PathBuf::from);
+        let mut suggested = vec![];
+        if let Some(root) = g.path.as_deref().map(PathBuf::from) {
+            for (_, log) in loaders::logs(&root) {
+                let text = fs::read(&log).map(|b| String::from_utf8_lossy(&b[b.len().saturating_sub(256 * 1024)..]).into_owned()).unwrap_or_default();
+                for v in prefix::suggest(&text) {
+                    if !suggested.contains(&v) {
+                        suggested.push(v);
+                    }
+                }
+            }
+        }
+        let installed = pfx.as_deref().map(prefix::installed).unwrap_or_default();
+        suggested.retain(|v| !installed.iter().any(|i| i == v));
+        let d = launchers::device();
+        Ok(PrefixStatus {
+            via: prefix::via(g.steam_app_id),
+            steam: g.steam_app_id.is_some(),
+            has_prefix: pfx.as_deref().is_some_and(|p| p.is_dir()),
+            installed,
+            verbs: prefix::VERBS.iter().map(|(verb, name, wanted_by)| PrefixVerb { verb, name, wanted_by }).collect(),
+            suggested,
+            flatpak: d.flatpak,
+            deck: d.deck || d.steamos,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Install a Visual C++, .NET or DirectX part in the game's prefix. Takes a while; returns what
+/// the tool printed last.
+#[tauri::command]
+async fn prefix_install(app: State<'_, App>, game: String, verb: String) -> Res<String> {
+    let g = list_games(&app).into_iter().find(|g| g.domain == game).ok_or("That game isn't on the Games page.")?;
+    let pfx = g.proton_prefix.clone().map(PathBuf::from).ok_or("This game has no Proton prefix yet: start it once from Steam (or its launcher), then try again.")?;
+    if g.path.as_deref().is_some_and(|p| activity::running(Path::new(p))) {
+        return Err("The game is running: close it first.".into());
+    }
+    let via = prefix::via(g.steam_app_id).ok_or(if g.steam_app_id.is_some() { "Install Protontricks first (Discover or Flathub: “Protontricks”)." } else { "Install winetricks first." })?;
+    let mut c = prefix::install_cmd(&via, g.steam_app_id, &pfx, &verb)?;
+    log::info(&format!("{game}: installing {verb} in the prefix"));
+    let out = tokio::task::spawn_blocking(move || c.output()).await.map_err(|e| e.to_string())?.map_err(|e| format!("Couldn't start it: {e}"))?;
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let home = std::env::var("HOME").unwrap_or_default();
+    let tail: Vec<&str> = text.lines().rev().take(30).collect::<Vec<_>>().into_iter().rev().collect();
+    let tail = tail.join("\n").replace(&home, "~");
+    if !out.status.success() {
+        return Err(format!("It didn't finish ({}).\n{tail}", out.status));
+    }
+    Ok(tail)
+}
+
+#[tauri::command]
+fn tools_list(app: State<'_, App>, game: String) -> Vec<prefix::Tool> {
+    prefix::tools(&app.data_dir).into_iter().filter(|t| t.game == game).collect()
+}
+
+/// Add or change a tool. An empty name takes the known tool's name (and its arguments).
+#[tauri::command]
+fn tool_save(app: State<'_, App>, tool: prefix::Tool) -> Res<prefix::Tool> {
+    let exe = PathBuf::from(&tool.exe);
+    if !exe.is_file() || !exe.extension().is_some_and(|x| x.eq_ignore_ascii_case("exe")) {
+        return Err("Pick the tool's .exe file.".into());
+    }
+    let mut t = tool;
+    if t.name.trim().is_empty() {
+        let (name, args) = prefix::known_tool(&exe).unwrap_or(("Tool", vec![]));
+        t.name = name.to_string();
+        if t.args.is_empty() {
+            t.args = args;
+        }
+    }
+    t.name = t.name.trim().chars().take(60).collect();
+    let mut all = prefix::tools(&app.data_dir);
+    if t.id.is_empty() {
+        t.id = format!("t{}{}", queue::now(), all.len());
+        all.push(t.clone());
+    } else if let Some(x) = all.iter_mut().find(|x| x.id == t.id) {
+        *x = t.clone();
+    } else {
+        return Err("That tool isn't there any more.".into());
+    }
+    prefix::save_tools(&app.data_dir, &all)?;
+    Ok(t)
+}
+
+#[tauri::command]
+fn tool_delete(app: State<'_, App>, id: String) -> Res<()> {
+    let all: Vec<_> = prefix::tools(&app.data_dir).into_iter().filter(|t| t.id != id).collect();
+    prefix::save_tools(&app.data_dir, &all)
+}
+
+/// What each game's last tool run made (only these can be kept as a mod).
+static TOOL_MADE: std::sync::LazyLock<Mutex<HashMap<String, Vec<String>>>> = std::sync::LazyLock::new(Default::default);
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolDone {
+    id: String,
+    game: String,
+    name: String,
+    ok: bool,
+    /// Files it made in the mod folder.
+    made: Vec<String>,
+}
+
+/// Run a tool in the game's prefix, with the profile in the game now. Returns at once; `tool:done`
+/// says when it closed and what it made.
+#[tauri::command]
+fn tool_run(handle: AppHandle, app: State<'_, App>, id: String) -> Res<()> {
+    let t = prefix::tools(&app.data_dir).into_iter().find(|t| t.id == id).ok_or("That tool isn't there any more.")?;
+    let (root, folder, pfx, g) = game_target(&app, &t.game)?;
+    let pfx = pfx.ok_or("This game has no Proton prefix yet: start it once, then try again.")?;
+    if activity::running(&root) {
+        return Err("The game is running: close it first.".into());
+    }
+    let via = prefix::via(g.steam_app_id).ok_or(if g.steam_app_id.is_some() { "Install Protontricks first (Discover or Flathub: “Protontricks”): tools run through it." } else { "Install wine and winetricks first." })?;
+    let mut c = prefix::launch_cmd(&via, g.steam_app_id, &pfx, Path::new(&t.exe), &t.args)?;
+    let mod_dir = if folder.is_empty() { root.clone() } else { root.join(&folder) };
+    let before = prefix::files_under(&mod_dir);
+    let mut child = c.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map_err(|e| format!("Couldn't start {}: {e}", t.name))?;
+    log::info(&format!("{}: started {}", t.game, t.name));
+    std::thread::spawn(move || {
+        let ok = child.wait().map(|s| s.success()).unwrap_or(false);
+        // Files already there before (the game's, and what the profile put in) are never taken.
+        let deployed: HashSet<String> = deploy::deployed(&handle.state::<App>().data_dir, &t.game).files.iter().map(|f| f.to_lowercase()).collect();
+        let pre = if folder.is_empty() { String::new() } else { format!("{}/", folder.to_lowercase()) };
+        let made: Vec<String> = prefix::made(&mod_dir, &before).into_iter().filter(|f| !deployed.contains(&format!("{pre}{}", f.to_lowercase()))).collect();
+        TOOL_MADE.lock().unwrap().insert(t.game.clone(), made.clone());
+        log::info(&format!("{}: {} closed; it made {} file(s)", t.game, t.name, made.len()));
+        let _ = handle.emit("tool:done", ToolDone { id: t.id, game: t.game, name: t.name, ok, made });
+    });
+    Ok(())
+}
+
+/// Keep what the last tool made as a mod of your own (moved into the library), added to the end
+/// of a profile when one is given, and that profile put in again when it's the one in the game.
+#[tauri::command]
+async fn tool_keep(app: State<'_, App>, game: String, name: String, profile: Option<String>) -> Res<library::StoredMod> {
+    let made = TOOL_MADE.lock().unwrap().remove(&game).unwrap_or_default();
+    if made.is_empty() {
+        return Err("The tool didn't make any new files.".into());
+    }
+    let (root, folder, ..) = game_target(&app, &game)?;
+    let mod_dir = if folder.is_empty() { root.clone() } else { root.join(&folder) };
+    let files: Vec<(String, PathBuf)> = made.iter().filter_map(|r| Some((r.clone(), deploy_inside(&mod_dir, r)?))).collect();
+    let lib = lib_dir(&app);
+    let g2 = game.clone();
+    let m = tokio::task::spawn_blocking(move || library::import_files(&lib, &g2, &name, &files, queue::now())).await.map_err(|e| e.to_string())??;
+    if let Some(pid) = profile {
+        {
+            let _turn = app.profiles.lock().await;
+            let mut all = profiles::load(&app.config_dir);
+            let p = all.iter_mut().find(|p| p.id == pid).ok_or("That profile isn't there any more.")?;
+            p.mods.push(deploy::ProfileMod { mod_id: m.mod_id, file_id: m.mod_id, enabled: true });
+            profiles::save(&app.config_dir, &all)?;
+        }
+        if deploy::deployed(&app.data_dir, &game).profile_id.as_deref() == Some(pid.as_str()) {
+            apply_profile(&app, &pid).await?;
+        }
+    }
+    log::info(&format!("{game}: kept {} file(s) a tool made as “{}”", made.len(), m.name));
+    Ok(m)
+}
+
+/// A path under `dir` that stays inside it.
+fn deploy_inside(dir: &Path, rel: &str) -> Option<PathBuf> {
+    let r = Path::new(rel);
+    r.components().all(|c| matches!(c, std::path::Component::Normal(_))).then(|| dir.join(r)).filter(|p| p.is_file())
+}
+
+// ---- Endorsing and tracking mods on Nexus Mods ----
+
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct Marks {
+    endorsed: Vec<(String, u64)>,
+    tracked: Vec<(String, u64)>,
+}
+
+static MARKS: std::sync::LazyLock<Mutex<Option<Marks>>> = std::sync::LazyLock::new(Default::default);
+
+/// Which mods you've endorsed and track (asked once per start, then kept up to date here).
+#[tauri::command]
+async fn nexus_marks(app: State<'_, App>, fresh: bool) -> Res<Marks> {
+    if !fresh {
+        if let Some(m) = MARKS.lock().unwrap().clone() {
+            return Ok(m);
+        }
+    }
+    let (endorsed, tracked) = app.nexus.marks().await.map_err(|e| e.message)?;
+    let m = Marks { endorsed, tracked };
+    *MARKS.lock().unwrap() = Some(m.clone());
+    Ok(m)
+}
+
+#[tauri::command]
+async fn mod_endorse(app: State<'_, App>, game: String, mod_id: u64, on: bool) -> Res<()> {
+    if library::is_local(mod_id) {
+        return Err("This mod isn't from Nexus Mods.".into());
+    }
+    let version = library::list(&lib_dir(&app)).into_iter().find(|m| m.game == game && m.mod_id == mod_id).and_then(|m| m.version).unwrap_or_default();
+    app.nexus.endorse(&game, mod_id, on, &version).await.map_err(|e| e.message)?;
+    if let Some(m) = MARKS.lock().unwrap().as_mut() {
+        m.endorsed.retain(|x| x != &(game.clone(), mod_id));
+        if on {
+            m.endorsed.push((game.clone(), mod_id));
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn mod_track(app: State<'_, App>, game: String, mod_id: u64, on: bool) -> Res<()> {
+    if library::is_local(mod_id) {
+        return Err("This mod isn't from Nexus Mods.".into());
+    }
+    app.nexus.track(&game, mod_id, on).await.map_err(|e| e.message)?;
+    if let Some(m) = MARKS.lock().unwrap().as_mut() {
+        m.tracked.retain(|x| x != &(game.clone(), mod_id));
+        if on {
+            m.tracked.push((game.clone(), mod_id));
+        }
+    }
+    Ok(())
+}
+
+// ---- Looking inside a mod ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModFile {
+    /// Where it goes, under the game folder.
+    path: String,
+    size: u64,
+    /// "text", "image" or "other".
+    kind: &'static str,
+    /// The later mod in the profile whose file is used instead.
+    lost_to: Option<String>,
+}
+
+fn file_kind(path: &str) -> &'static str {
+    let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => "image",
+        "txt" | "ini" | "json" | "xml" | "md" | "toml" | "yaml" | "yml" | "cfg" | "log" | "lua" | "psc" | "cs" | "js" | "html" | "csv" | "lsx" | "conf" | "reds" => "text",
+        _ => "other",
+    }
+}
+
+/// The mod's unpacked files and where they come from (the profile's file of it, else its newest).
+fn mod_entries(app: &App, game: &str, mod_id: u64, file_id: Option<u64>) -> Res<(library::StoredMod, Vec<(String, PathBuf)>)> {
+    let m = library::list(&lib_dir(app)).into_iter().find(|m| m.game == game && m.mod_id == mod_id).ok_or("That mod isn't in the library.")?;
+    let f = file_id.and_then(|id| m.files.iter().find(|f| f.file_id == id)).or_else(|| m.files.iter().max_by_key(|f| f.downloaded_at)).ok_or("This mod has no files.")?;
+    if f.unpacked.is_none() && f.installed.is_none() {
+        return Err("This file isn't unpacked yet: unpack it in the Library (or put its profile in) to look inside.".into());
+    }
+    let dir = deploy::unpacked_dir(&m, f)?;
+    let folder = deploy::default_mod_folder(game).unwrap_or("").to_string();
+    let folder = list_games(app).into_iter().find(|g| g.domain == game).and_then(|g| g.mod_folder).unwrap_or(folder);
+    Ok((m.clone(), deploy::entries(&dir, &folder)))
+}
+
+#[tauri::command]
+fn mod_contents(app: State<'_, App>, game: String, mod_id: u64, profile: Option<String>) -> Res<Vec<ModFile>> {
+    let p = profile.and_then(|id| find_profile(&app, &id).ok());
+    let file_id = p.as_ref().and_then(|p| p.mods.iter().find(|x| x.mod_id == mod_id)).map(|x| x.file_id);
+    let (_, entries) = mod_entries(&app, &game, mod_id, file_id)?;
+    // Who wins each file: the last mod switched on in the profile that has it.
+    let mut lost: HashMap<String, String> = HashMap::new();
+    if let Some(p) = &p {
+        let mine = entries.iter().map(|(r, _)| r.to_lowercase()).collect::<HashSet<_>>();
+        if let Some(at) = p.mods.iter().position(|x| x.mod_id == mod_id) {
+            for later in p.mods[at + 1..].iter().filter(|x| x.enabled) {
+                if let Ok((lm, le)) = mod_entries(&app, &game, later.mod_id, Some(later.file_id)) {
+                    for (r, _) in le {
+                        if mine.contains(&r.to_lowercase()) {
+                            lost.insert(r.to_lowercase(), lm.name.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut out: Vec<ModFile> = entries
+        .into_iter()
+        .map(|(rel, from)| ModFile { size: fs::metadata(&from).map(|m| m.len()).unwrap_or(0), kind: file_kind(&rel), lost_to: lost.get(&rel.to_lowercase()).cloned(), path: rel })
+        .collect();
+    out.sort_by_key(|a| a.path.to_lowercase());
+    Ok(out)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileLook {
+    text: Option<String>,
+    /// A data: address for a picture.
+    image: Option<String>,
+    cut: bool,
+}
+
+/// One of a mod's files, to look at: text (the first 256 KB) or a picture (up to 8 MB).
+#[tauri::command]
+fn mod_file_read(app: State<'_, App>, game: String, mod_id: u64, path: String, profile: Option<String>) -> Res<FileLook> {
+    use base64::Engine;
+    let file_id = profile.and_then(|id| find_profile(&app, &id).ok()).and_then(|p| p.mods.iter().find(|x| x.mod_id == mod_id).map(|x| x.file_id));
+    let (_, entries) = mod_entries(&app, &game, mod_id, file_id)?;
+    // Only one of the mod's own files: never a path from the page.
+    let from = entries.into_iter().find(|(r, _)| *r == path).map(|(_, f)| f).ok_or("That file isn't in this mod.")?;
+    match file_kind(&path) {
+        "image" => {
+            let len = fs::metadata(&from).map_err(|e| e.to_string())?.len();
+            if len > 8 * 1024 * 1024 {
+                return Err("This picture is too big to show here.".into());
+            }
+            let ext = path.rsplit('.').next().unwrap_or("png").to_lowercase();
+            let mime = match ext.as_str() {
+                "jpg" | "jpeg" => "image/jpeg",
+                "webp" => "image/webp",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                _ => "image/png",
+            };
+            let b = fs::read(&from).map_err(|e| e.to_string())?;
+            Ok(FileLook { text: None, image: Some(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(b))), cut: false })
+        }
+        _ => {
+            let mut b = vec![];
+            use std::io::Read;
+            fs::File::open(&from).map_err(|e| e.to_string())?.take(256 * 1024 + 1).read_to_end(&mut b).map_err(|e| e.to_string())?;
+            let cut = b.len() > 256 * 1024;
+            b.truncate(256 * 1024);
+            if b.iter().take(4096).filter(|&&c| c == 0).count() > 0 {
+                return Err("This isn't a text file.".into());
+            }
+            Ok(FileLook { text: Some(String::from_utf8_lossy(&b).into_owned()), image: None, cut })
+        }
+    }
+}
+
+// ---- One-click loaders (UE4SS, ReShade) ----
+
+#[tauri::command]
+fn loader_offers(app: State<'_, App>, game: String) -> Vec<loaderkit::Offer> {
+    let Some(root) = list_games(&app).into_iter().find(|g| g.domain == game).and_then(|g| g.path) else { return vec![] };
+    loaderkit::offers(Path::new(&root))
+}
+
+async fn fetch_bytes(http: &reqwest::Client, url: &str, max: u64) -> Res<Vec<u8>> {
+    let r = http.get(url).timeout(std::time::Duration::from_secs(120)).send().await.map_err(|e| format!("Couldn't download it: {e}"))?;
+    if !r.status().is_success() {
+        return Err(format!("The download answered {}.", r.status()));
+    }
+    if r.content_length().is_some_and(|n| n > max) {
+        return Err("The download is bigger than expected.".into());
+    }
+    let b = r.bytes().await.map_err(|e| e.to_string())?;
+    if b.len() as u64 > max {
+        return Err("The download is bigger than expected.".into());
+    }
+    Ok(b.to_vec())
+}
+
+/// Download a loader and keep it as a mod of your own, built for the game folder.
+#[tauri::command]
+async fn loader_install(app: State<'_, App>, game: String, id: String) -> Res<library::StoredMod> {
+    let (root, ..) = game_target(&app, &game)?;
+    let http = app.nexus.http().clone();
+    let lib = lib_dir(&app);
+    let tmp = lib.join(library::INCOMING).join(format!("loader-{}", queue::now()));
+    let _ = fs::remove_dir_all(&tmp);
+    let (name, dll) = match id.as_str() {
+        "ue4ss" => {
+            let at = loaderkit::unreal_dir(&root).ok_or("This doesn't look like an Unreal Engine game.")?;
+            let rel: serde_json::Value = http
+                .get("https://api.github.com/repos/UE4SS-RE/RE-UE4SS/releases/latest")
+                .header("accept", "application/vnd.github+json")
+                .timeout(std::time::Duration::from_secs(20))
+                .send()
+                .await
+                .map_err(|e| format!("Couldn't reach GitHub: {e}"))?
+                .json()
+                .await
+                .map_err(|e| e.to_string())?;
+            let (url, tag) = loaderkit::ue4ss_asset(&rel).ok_or("GitHub's newest UE4SS release has no download for it.")?;
+            let zip = fetch_bytes(&http, &url, 200 * 1024 * 1024).await?;
+            let at2 = at.clone();
+            let n = loaderkit::unzip(&zip, &tmp, move |r| Some(Path::new(&at2).join(r)))?;
+            if n == 0 {
+                return Err("The UE4SS download was empty.".into());
+            }
+            (format!("UE4SS {tag}"), "dwmapi")
+        }
+        "reshade-dxgi" | "reshade-d3d9" => {
+            let dll = if id == "reshade-dxgi" { "dxgi" } else { "d3d9" };
+            let page = http.get("https://reshade.me/").timeout(std::time::Duration::from_secs(20)).send().await.map_err(|e| format!("Couldn't reach reshade.me: {e}"))?.text().await.map_err(|e| e.to_string())?;
+            let setup = loaderkit::reshade_setup(&page).ok_or("Couldn't find ReShade's download on reshade.me. Get it from there by hand.")?;
+            let exe = fetch_bytes(&http, &format!("https://reshade.me/downloads/{setup}"), 200 * 1024 * 1024).await?;
+            let at = loaderkit::exe_dir(&root);
+            let place = |p: &str| if at.is_empty() { PathBuf::from(p) } else { Path::new(&at).join(p) };
+            // The setup program is a zip with the DLL inside.
+            let (p1, p2) = (place(&format!("{dll}.dll")), place("ReShade.ini"));
+            let n = loaderkit::unzip(&exe, &tmp, |r| (r.to_string_lossy().eq_ignore_ascii_case("ReShade64.dll")).then(|| p1.clone())).map_err(|_| "ReShade's setup didn't open as expected. Get ReShade from reshade.me by hand.".to_string())?;
+            if n == 0 {
+                return Err("ReShade's setup didn't have the 64-bit DLL in it.".into());
+            }
+            fs::write(tmp.join(&p2), loaderkit::RESHADE_INI).map_err(|e| e.to_string())?;
+            let shaders = fetch_bytes(&http, "https://github.com/crosire/reshade-shaders/archive/refs/heads/slim.zip", 100 * 1024 * 1024).await?;
+            let base = place("reshade-shaders");
+            loaderkit::unzip(&shaders, &tmp, move |r| {
+                let mut c = r.components();
+                c.next()?; // reshade-shaders-slim/
+                let rest = c.as_path();
+                let top = rest.components().next()?.as_os_str().to_string_lossy().to_string();
+                matches!(top.as_str(), "Shaders" | "Textures").then(|| base.join(rest))
+            })?;
+            (format!("ReShade ({})", setup.trim_start_matches("ReShade_Setup_").trim_end_matches(".exe")), dll)
+        }
+        _ => return Err("Zom's Nexus doesn't know that loader.".into()),
+    };
+    let game2 = game.clone();
+    let tmp2 = tmp.clone();
+    let m = tokio::task::spawn_blocking(move || -> Res<library::StoredMod> {
+        let files: Vec<(String, PathBuf)> = prefix::files_under(&tmp2).into_iter().map(|r| (r.clone(), tmp2.join(&r))).collect();
+        let m = library::import_files(&lib, &game2, &name, &files, queue::now())?;
+        loaderkit::built(Path::new(&m.folder))?;
+        Ok(m)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let _ = fs::remove_dir_all(&tmp);
+    let m = m?;
+    log::info(&format!("{game}: added {} (needs {dll} in the launch options under Proton)", m.name));
+    Ok(m)
+}
+
+// ---- Send from your phone ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemotePage {
+    url: String,
+    width: usize,
+    cells: Vec<bool>,
+}
+
+#[tauri::command]
+fn remote_start(handle: AppHandle) -> Res<RemotePage> {
+    let h = handle.clone();
+    let url = remote::start(move |sent| match sent {
+        remote::Sent::Link(l) if l.starts_with("nxm://") => {
+            take_link(&h, &[l]);
+            "Sent: it's on the Downloads page.".into()
+        }
+        remote::Sent::Link(l) => {
+            let _ = h.emit("remote:link", l);
+            "Sent: look at Zom's Nexus to carry on.".into()
+        }
+        remote::Sent::Key(k) => match tauri::async_runtime::block_on(use_key(&h.state::<App>(), k)) {
+            Ok(o) => {
+                let _ = h.emit("account:changed", ());
+                format!("Signed in{}.", o.user.map(|u| format!(" as {}", u.name)).unwrap_or_default())
+            }
+            Err(e) => e,
+        },
+    })?;
+    log::info("Send from your phone: the page is open on the home network");
+    let (width, cells) = remote::qr(&url)?;
+    Ok(RemotePage { url, width, cells })
+}
+
+#[tauri::command]
+fn remote_stop() {
+    remote::stop();
+}
+
+/// From the Steam Deck's quick access menu (the Decky plugin) or a shortcut: `--profile <id>`
+/// puts a profile in its game, `--no-mods <game>` takes the mods out.
+fn take_args(handle: &AppHandle, args: &[String]) {
+    let after = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
+    let h = handle.clone();
+    if let Some(id) = after("--profile") {
+        tauri::async_runtime::spawn(async move {
+            let app = h.state::<App>();
+            match apply_profile(&app, &id).await {
+                Ok(_) => log::info("Put a profile in from the quick access menu"),
+                Err(e) => log::warn(&format!("Couldn't put a profile in from the quick access menu: {e}")),
+            }
+            let _ = h.emit("profiles:changed", ());
+        });
+    } else if let Some(game) = after("--no-mods") {
+        tauri::async_runtime::spawn(async move {
+            let app = h.state::<App>();
+            let r = {
+                let _turn = app.profiles.lock().await;
+                clear_game(&app, game).await
+            };
+            if let Err(e) = r {
+                log::warn(&format!("Couldn't take the mods out from the quick access menu: {e}"));
+            }
+            let _ = h.emit("profiles:changed", ());
+        });
+    }
+}
+
 #[cfg(target_os = "linux")]
 const DEV_MARK: &str = "X-Zoms-Nexus-Dev=true";
 
@@ -3354,7 +3920,10 @@ pub fn run() {
             _ => {}
         })
         // A second start (a link from the browser) hands its link to the copy already open.
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| take_link(app, &args)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            take_link(app, &args);
+            take_args(app, &args);
+        }))
         // The window opens at the size (and, where the desktop allows it, the place) it had
         // last time. Showing it stays the app's own choice.
         .plugin(
@@ -3380,6 +3949,11 @@ pub fn run() {
             let _ = fs::create_dir_all(s.library());
             let nexus = Nexus::new(settings::load_key(&config_dir));
             let settings = Arc::new(Mutex::new(s));
+            // How to start this app, for the Steam Deck's quick access menu (the Decky plugin).
+            if let Ok(exe) = std::env::current_exe() {
+                let exe = std::env::var("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
+                let _ = fs::write(data_dir.join("launch.json"), serde_json::json!({ "exe": exe, "flatpak": host::in_flatpak() }).to_string());
+            }
             let queue = Queue::new(Some(app.handle().clone()), data_dir.clone(), settings.clone(), nexus.clone());
             queue.start();
             app.manage(App {
@@ -3524,6 +4098,7 @@ pub fn run() {
 
             let args: Vec<String> = std::env::args().collect();
             take_link(app.handle(), &args);
+            take_args(app.handle(), &args);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -3662,6 +4237,24 @@ pub fn run() {
             loot_sort,
             loot_apply,
             app_update,
+            remote_start,
+            remote_stop,
+            loader_offers,
+            loader_install,
+            nexus_marks,
+            mod_endorse,
+            mod_track,
+            mod_contents,
+            mod_file_read,
+            extender_info,
+            extender_set,
+            prefix_status,
+            prefix_install,
+            tools_list,
+            tool_save,
+            tool_delete,
+            tool_run,
+            tool_keep,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Zom's Nexus");

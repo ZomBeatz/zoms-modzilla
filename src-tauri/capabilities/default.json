@@ -145,6 +145,24 @@
     "allow-snapshot-delete",
     "allow-loot-sort",
     "allow-loot-apply",
-    "allow-app-update"
+    "allow-app-update",
+    "allow-remote-start",
+    "allow-remote-stop",
+    "allow-loader-offers",
+    "allow-loader-install",
+    "allow-nexus-marks",
+    "allow-mod-endorse",
+    "allow-mod-track",
+    "allow-mod-contents",
+    "allow-mod-file-read",
+    "allow-extender-info",
+    "allow-extender-set",
+    "allow-prefix-status",
+    "allow-prefix-install",
+    "allow-tools-list",
+    "allow-tool-save",
+    "allow-tool-delete",
+    "allow-tool-run",
+    "allow-tool-keep"
   ]
 }

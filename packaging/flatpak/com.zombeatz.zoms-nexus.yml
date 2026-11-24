@@ -57,6 +57,6 @@ modules:
     sources:
       - type: git
         url: https://github.com/ZomBeatz/zoms-nexus.git
-        tag: v0.1.0
+        tag: v0.0.1
       - cargo-sources.json
       - node-sources.json

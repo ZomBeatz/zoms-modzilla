@@ -6,9 +6,12 @@ import { DeckSetup } from "./DeckSetup";
 import { UpdateBanner } from "./UpdateBanner";
 import { Palette } from "./Palette";
 import { wantProfile } from "./nav";
+import { ToolOutput } from "./pages/GameTools";
+import { Guide } from "./pages/Guide";
+import { PhoneSend } from "./PhoneSend";
 import { GonePrompt } from "./pages/GoneGames";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Compass, Download, FolderOpen, Gamepad2, Layers, Settings as Cog } from "lucide-react";
+import { Bell, Compass, Download, FolderOpen, Gamepad2, Layers, LifeBuoy, Settings as Cog } from "lucide-react";
 import { api, type Profile, fileUrl, isDesktop, on, type DriveUse, type Game, type GameState, type Job, type Overview } from "./api";
 import { GameStatus, QuickPlay, showing } from "./GameStatus";
 import { GamePicker } from "./GamePicker";
@@ -26,7 +29,7 @@ import { Browse } from "./pages/Browse";
 import { Profiles } from "./pages/Profiles";
 import { Activity } from "./pages/Activity";
 
-export type Page = "downloads" | "library" | "browse" | "profiles" | "games" | "activity" | "settings";
+export type Page = "downloads" | "library" | "browse" | "profiles" | "games" | "activity" | "guide" | "settings";
 
 export interface Ctx {
   overview: Overview;
@@ -64,6 +67,7 @@ const PAGES: { id: Page; label: string; icon: typeof Download }[] = [
   { id: "profiles", label: "Profiles", icon: Layers },
   { id: "games", label: "Games", icon: Gamepad2 },
   { id: "activity", label: "Activity", icon: Bell },
+  { id: "guide", label: "Help", icon: LifeBuoy },
   { id: "settings", label: "Settings", icon: Cog },
 ];
 
@@ -284,6 +288,7 @@ export default function App({ first }: { first: Overview }) {
         }
       }),
       on<null>("account:changed", () => void api.overview().then(setOverview)),
+      on<string>("remote:link", (link) => setAdding(link)),
       on<string>("collection:added", (name) => {
         toast(`Added the collection “${name}” to downloads, with a profile`);
         void api.queue().then(setJobs);
@@ -325,6 +330,8 @@ export default function App({ first }: { first: Overview }) {
 
   // Ctrl+K finds anything; N adds a mod, unless you're typing.
   const [finding, setFinding] = useState(false);
+  const [phone, setPhone] = useState(false);
+  const online = useOnline();
   // Steam Deck mode and the controller: LB/RB change page, Y plays, Menu finds anything.
   const [deck, setDeck] = useState(false);
   useEffect(() => {
@@ -356,6 +363,13 @@ export default function App({ first }: { first: Overview }) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setFinding((f) => !f);
+        return;
+      }
+      // For Steam Input: the Deck's back buttons can be set to these keys.
+      const fkey: Record<string, () => void> = { F1: () => go("guide"), F2: () => setFinding((f) => !f), F3: () => go("downloads"), F4: () => setPhone(true) };
+      if (fkey[e.key] && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        fkey[e.key]();
         return;
       }
       const t = e.target as HTMLElement;
@@ -442,6 +456,11 @@ export default function App({ first }: { first: Overview }) {
       <DeckSetup games={games} hasKey={overview.hasKey} toast={toast} goSettings={() => go("settings")} reloadGames={reloadGames} />
       <main className="main">
         {isDesktop && <UpdateBanner />}
+        {!online && (
+          <div className="banner warn">
+            <b>You're offline.</b> Your library, profiles and Play still work. Browse, update checks and downloads wait for the connection.
+          </div>
+        )}
         {!isDesktop && (
           <div className="banner demo-banner">
             <b>Live demo.</b> Try anything. Changes are only kept in this browser tab, and downloads are pretend.{" "}
@@ -474,6 +493,7 @@ export default function App({ first }: { first: Overview }) {
         {page === "profiles" && <Profiles {...ctx} />}
         {page === "games" && <Games {...ctx} />}
         {page === "activity" && <Activity {...ctx} />}
+        {page === "guide" && <Guide {...ctx} />}
         {page === "settings" && <SettingsPage {...ctx} />}
       </main>
       {adding !== false && <AddDialog {...ctx} initial={adding} onClose={() => setAdding(false)} />}
@@ -481,9 +501,27 @@ export default function App({ first }: { first: Overview }) {
       <Toast toast={toastMsg} onDone={() => setToast(null)} />
       <GonePrompt toast={toast} />
       <SavesGate games={games} toast={toast} jobs={jobs} />
+      <ToolOutput toast={toast} />
+      {phone && <PhoneSend onClose={() => setPhone(false)} />}
       {finding && <Palette games={games} go={go} setGame={setGame} openAdd={() => setAdding("")} onClose={() => setFinding(false)} />}
     </div>
   );
+}
+
+/** Whether the computer has a connection (the browser engine's own idea of it). */
+function useOnline() {
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online;
 }
 
 /** The corner summary of the download list: what's going, how fast, and what's left. */

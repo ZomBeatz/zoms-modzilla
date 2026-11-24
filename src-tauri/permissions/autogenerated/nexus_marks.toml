@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-nexus-marks"
+description = "Enables the nexus_marks command without any pre-configured scope."
+commands.allow = ["nexus_marks"]
+
+[[permission]]
+identifier = "deny-nexus-marks"
+description = "Denies the nexus_marks command without any pre-configured scope."
+commands.deny = ["nexus_marks"]

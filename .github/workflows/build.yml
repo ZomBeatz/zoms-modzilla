@@ -1,0 +1,69 @@
+# Builds the Linux installers (.deb, .rpm, AppImage) on GitHub's machines.
+# Run it from the Actions tab ("Run workflow"), or push a tag like v0.0.1.
+# Every run keeps the files under the run's "Artifacts"; a tag also makes a draft release with
+# them and that version's changelog section as its notes. Check the draft, then publish it.
+name: Desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  linux:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libudev-dev patchelf
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+      - run: npm test
+      - name: Desktop app tests
+        run: npm run build && cargo test --manifest-path src-tauri/Cargo.toml
+
+      # The release notes: this version's section of CHANGELOG.md.
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          body=$(awk -v v="$v" '$0 == "## " v {on=1; next} /^## / && on {exit} on' CHANGELOG.md)
+          [ -n "$body" ] || body="See CHANGELOG.md."
+          { echo "body<<END_NOTES"; printf '%s\n' "$body"; echo "END_NOTES"; } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: "--bundles deb,rpm,appimage"
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: "Zom's Nexus ${{ github.ref_name }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: zoms-nexus-linux
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error

@@ -49,6 +49,8 @@ export interface Settings {
   games: { domain: string; name: string; path?: string | null; modFolder?: string | null; launch?: string | null }[];
   /** Snapshot a game's saves by itself before each Play. */
   snapshotBeforePlay?: boolean;
+  batteryFloor?: number;
+  unpackOnPower?: boolean;
   /** Ask GitHub once a day whether a newer Zom's Nexus is out. */
   checkAppUpdates?: boolean;
 }
@@ -612,7 +614,80 @@ export async function on<T>(event: string, handler: (payload: T) => void): Promi
   return listen<T>(event, (e) => handler(e.payload));
 }
 
+export interface Extender {
+  name: string;
+  loader: string;
+  launcher: string;
+  on: boolean;
+  installed: boolean;
+  swapped: boolean;
+}
+
+export interface PrefixStatus {
+  via: "protontricks" | "protontricksFlatpak" | "winetricks" | null;
+  steam: boolean;
+  hasPrefix: boolean;
+  installed: string[];
+  verbs: { verb: string; name: string; wantedBy: string }[];
+  suggested: string[];
+  flatpak: boolean;
+  deck: boolean;
+}
+
+export interface Tool {
+  id: string;
+  game: string;
+  name: string;
+  exe: string;
+  args: string[];
+}
+
+export interface ToolDone {
+  id: string;
+  game: string;
+  name: string;
+  ok: boolean;
+  made: string[];
+}
+
+export interface LoaderOffer {
+  id: string;
+  name: string;
+  what: string;
+  dll: string;
+}
+
+export interface ModFileEntry {
+  path: string;
+  size: number;
+  kind: "text" | "image" | "other";
+  lostTo?: string | null;
+}
+
+export interface Marks {
+  endorsed: [string, number][];
+  tracked: [string, number][];
+}
+
 export const api = {
+  extender: (game: string) => call<Extender | null>("extender_info", { game }),
+  setExtender: (game: string, on: boolean) => call<Extender | null>("extender_set", { game, on }),
+  prefixStatus: (game: string) => call<PrefixStatus>("prefix_status", { game }),
+  prefixInstall: (game: string, verb: string) => call<string>("prefix_install", { game, verb }),
+  tools: (game: string) => call<Tool[]>("tools_list", { game }),
+  saveTool: (tool: Tool) => call<Tool>("tool_save", { tool }),
+  deleteTool: (id: string) => call<void>("tool_delete", { id }),
+  runTool: (id: string) => call<void>("tool_run", { id }),
+  keepToolFiles: (game: string, name: string, profile: string | null) => call<StoredMod>("tool_keep", { game, name, profile }),
+  loaderOffers: (game: string) => call<LoaderOffer[]>("loader_offers", { game }),
+  installLoader: (game: string, id: string) => call<StoredMod>("loader_install", { game, id }),
+  marks: (fresh = false) => call<Marks>("nexus_marks", { fresh }),
+  endorse: (game: string, modId: number, on: boolean) => call<void>("mod_endorse", { game, modId, on }),
+  track: (game: string, modId: number, on: boolean) => call<void>("mod_track", { game, modId, on }),
+  modContents: (game: string, modId: number, profile: string | null) => call<ModFileEntry[]>("mod_contents", { game, modId, profile }),
+  modFileRead: (game: string, modId: number, path: string, profile: string | null) => call<{ text?: string | null; image?: string | null; cut: boolean }>("mod_file_read", { game, modId, path, profile }),
+  remoteStart: () => call<{ url: string; width: number; cells: boolean[] }>("remote_start"),
+  remoteStop: () => call<void>("remote_stop"),
   overview: () => call<Overview>("get_overview"),
   saveSettings: (settings: Settings) => call<Overview>("save_settings", { settings }),
   setApiKey: (key: string) => call<Overview>("set_api_key", { key }),
@@ -798,10 +873,10 @@ export async function pickSave(title: string, defaultPath: string): Promise<stri
 }
 
 /** A file to open: a mod pack, or a mod's archive. */
-export async function pickFile(title: string, kind: "pack" | "mod" = "pack"): Promise<string | null> {
+export async function pickFile(title: string, kind: "pack" | "mod" | "exe" = "pack"): Promise<string | null> {
   if (!isDesktop) return null;
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const filters = kind === "pack" ? [{ name: "Mod pack", extensions: ["json"] }] : [{ name: "Mod archives", extensions: ["zip", "7z", "rar"] }];
+  const filters = kind === "pack" ? [{ name: "Mod pack", extensions: ["json"] }] : kind === "exe" ? [{ name: "Windows programs", extensions: ["exe", "EXE"] }] : [{ name: "Mod archives", extensions: ["zip", "7z", "rar"] }];
   const r = await open({ title, multiple: false, filters });
   return typeof r === "string" ? r : null;
 }

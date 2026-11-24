@@ -692,6 +692,56 @@ pub fn import(lib: &Path, game: &str, src: &Path, now: u64) -> Result<StoredMod,
     Ok(meta)
 }
 
+/// Make a mod of your own from files on this computer (what a modding tool made in the game
+/// folder): they're moved into the library, under `unpacked/` at the same place under the mod
+/// folder. Each `(rel, from)` is the file's place under the mod folder and where it is now.
+pub fn import_files(lib: &Path, game: &str, name: &str, files: &[(String, PathBuf)], now: u64) -> Result<StoredMod, String> {
+    if files.is_empty() {
+        return Err("There are no files to keep.".into());
+    }
+    let gdir = game_dir(lib, game)?;
+    fs::create_dir_all(&gdir).map_err(|e| e.to_string())?;
+    let _turn = turn();
+    let mut id = LOCAL_IDS + now;
+    while list_ids(&gdir).contains(&id) {
+        id += 1;
+    }
+    let name = if name.trim().is_empty() { "Tool output".to_string() } else { name.trim().chars().take(120).collect() };
+    let dir = gdir.join(format!("{id} - {}", safe_name(&name)));
+    let unpacked = dir.join("unpacked");
+    let mut size = 0;
+    for (rel, from) in files {
+        let rel = Path::new(rel);
+        if rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+            continue;
+        }
+        let to = unpacked.join(rel);
+        fs::create_dir_all(to.parent().unwrap()).map_err(|e| e.to_string())?;
+        if fs::rename(from, &to).is_err() {
+            fs::copy(from, &to).map_err(|e| format!("Couldn't keep {}: {e}", rel.display()))?;
+            fs::remove_file(from).map_err(|e| e.to_string())?;
+        }
+        size += fs::metadata(&to).map(|m| m.len()).unwrap_or(0);
+    }
+    let mut meta = StoredMod {
+        game: game.to_string(),
+        mod_id: id,
+        name: name.clone(),
+        author: None,
+        version: None,
+        summary: Some("Made on this computer, kept as a mod of your own.".into()),
+        picture_url: None,
+        files: vec![StoredFile { file_id: id, name, file_name: String::new(), version: None, category: None, size, downloaded_at: now, archive: None, unpacked: Some("unpacked".into()), uploaded: None, verified: None, installed: None, has_installer: false }],
+        local: true,
+        adult: false,
+        folder: String::new(),
+        source: None,
+    };
+    write_meta(&dir, &meta)?;
+    meta.folder = dir.to_string_lossy().into_owned();
+    Ok(meta)
+}
+
 /// The mod numbers already used in a game's folder.
 fn list_ids(gdir: &Path) -> Vec<u64> {
     fs::read_dir(gdir)

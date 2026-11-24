@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArrowUpCircle, ExternalLink, FileUp, FolderOpen, HardDrive, Layers, Package, PackageOpen, Plus, RefreshCw, Search, StickyNote, Tag, Trash2 } from "lucide-react";
+import { Archive, ArrowUpCircle, Bookmark, ExternalLink, FileSearch, FileUp, FolderOpen, HardDrive, Layers, Package, PackageOpen, Plus, RefreshCw, Search, StickyNote, Tag, ThumbsUp, Trash2 } from "lucide-react";
+import { ModViewer } from "./ModViewer";
 import { api, isDesktop, modUrl, openUrl, pickFile, type Game, type Profile, type StoredFile, type StoredMod, type UpdateReport } from "../api";
 import { Cover, GameTag, Hero } from "../art";
 import { AddToProfile } from "./AddToProfile";
@@ -50,6 +51,9 @@ function ImportFor({ games, onPick, onClose }: { games: Game[]; onPick: (g: stri
 /** "Owner-Name" for a mod from Thunderstore. */
 const tsOf = (m: StoredMod) => (m.source?.startsWith("thunderstore:") ? m.source.slice(13) : null);
 
+/** From Nexus Mods (not your own file, not Thunderstore): it can be endorsed and tracked. */
+const nexusMod = (m: StoredMod) => !m.local && !m.source;
+
 export function Library({ toast, libraryVersion, openAdd, overview, game: picked, games: gameList, menu }: Ctx) {
   const [mods, setMods] = useState<StoredMod[] | null>(null);
   const game = picked ?? "all";
@@ -77,6 +81,28 @@ export function Library({ toast, libraryVersion, openAdd, overview, game: picked
   const [sort, setSort] = useState<"name" | "newest" | "biggest">("name");
   const [deleting, setDeleting] = useState<{ mod: StoredMod; file?: StoredFile } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<StoredMod | null>(null);
+  // Which mods you've endorsed and track on Nexus Mods (asked once per start).
+  const [marks, setMarks] = useState<{ endorsed: Set<string>; tracked: Set<string> } | null>(null);
+  const signedIn = !!overview.user;
+  useEffect(() => {
+    if (!signedIn) return;
+    void api.marks().then((m) => setMarks({ endorsed: new Set(m.endorsed.map(([g, id]) => `${g}:${id}`)), tracked: new Set(m.tracked.map(([g, id]) => `${g}:${id}`)) }), () => {});
+  }, [signedIn]);
+  const mark = (kind: "endorsed" | "tracked", m: StoredMod, on: boolean) =>
+    void (kind === "endorsed" ? api.endorse(m.game, m.modId, on) : api.track(m.game, m.modId, on)).then(
+      () => {
+        setMarks((x) => {
+          if (!x) return x;
+          const next = new Set(x[kind]);
+          if (on) next.add(`${m.game}:${m.modId}`);
+          else next.delete(`${m.game}:${m.modId}`);
+          return { ...x, [kind]: next };
+        });
+        toast(kind === "endorsed" ? (on ? `Endorsed ${m.name}. Thanks from its author!` : `Took back your endorsement of ${m.name}.`) : on ? `Tracking ${m.name} on Nexus Mods.` : `Stopped tracking ${m.name}.`);
+      },
+      (e) => toast((e as Error).message),
+    );
   const search = useRef<HTMLInputElement>(null);
 
   const load = () => api.library().then(setMods, (e) => toast((e as Error).message));
@@ -318,6 +344,9 @@ export function Library({ toast, libraryVersion, openAdd, overview, game: picked
                   tidy([
                     newest && { label: "Add to profile…", icon: <Layers size={14} />, run: () => setProfiling({ mod: m, file: newest }) },
                     packed && { label: "Unpack", icon: <PackageOpen size={14} />, run: () => void unpack(m, packed) },
+                    !packed && { label: "Look inside…", icon: <FileSearch size={14} />, run: () => setViewing(m) },
+                    nexusMod(m) && signedIn && { label: marks?.endorsed.has(`${m.game}:${m.modId}`) ? "Take endorsement back" : "Endorse", icon: <ThumbsUp size={14} />, run: () => mark("endorsed", m, !marks?.endorsed.has(`${m.game}:${m.modId}`)) },
+                    nexusMod(m) && signedIn && { label: marks?.tracked.has(`${m.game}:${m.modId}`) ? "Stop tracking" : "Track on Nexus Mods", icon: <Bookmark size={14} />, run: () => mark("tracked", m, !marks?.tracked.has(`${m.game}:${m.modId}`)) },
                     { label: notes[`${m.game}:${m.modId}`] ? "Change note…" : "Add a note…", icon: <StickyNote size={14} />, run: () => setNoting(m) },
                     { label: "Tags…", icon: <Tag size={14} />, run: () => setTagging(m) },
                     { label: "Open folder", icon: <FolderOpen size={14} />, run: () => void act(api.openFolder({ game: m.game, modId: m.modId })) },
@@ -350,6 +379,22 @@ export function Library({ toast, libraryVersion, openAdd, overview, game: picked
                   ) : (
                     <button className="icon-btn" title="Open on Nexus Mods" aria-label="Open on Nexus Mods" onClick={() => act(openUrl(modUrl(m.game, m.modId)))}>
                       <ExternalLink size={15} />
+                    </button>
+                  )}
+                  {nexusMod(m) && signedIn && marks && (
+                    <button
+                      className={`icon-btn${marks.endorsed.has(`${m.game}:${m.modId}`) ? " on" : ""}`}
+                      title={marks.endorsed.has(`${m.game}:${m.modId}`) ? "You endorsed it (press to take it back)" : "Endorse it on Nexus Mods: it tells its author thanks"}
+                      aria-label="Endorse"
+                      aria-pressed={marks.endorsed.has(`${m.game}:${m.modId}`)}
+                      onClick={() => mark("endorsed", m, !marks.endorsed.has(`${m.game}:${m.modId}`))}
+                    >
+                      <ThumbsUp size={15} />
+                    </button>
+                  )}
+                  {m.files.some((f) => f.unpacked || f.installed) && (
+                    <button className="icon-btn" title="Look inside: its files, pictures and readmes" aria-label="Look inside" onClick={() => setViewing(m)}>
+                      <FileSearch size={15} />
                     </button>
                   )}
                   <button className="icon-btn" title="Tags" aria-label="Tags" onClick={() => setTagging(m)}>
@@ -449,6 +494,7 @@ export function Library({ toast, libraryVersion, openAdd, overview, game: picked
           ))}
         </div>
       )}
+      {viewing && <ModViewer mod={viewing} profiles={profiles} onClose={() => setViewing(null)} />}
       {tagging && <TagDialog game={tagging.game} modId={tagging.modId} name={tagging.name} known={tagsIn(tags, Object.keys(tags))} onClose={() => setTagging(null)} toast={toast} />}
       {installing && (
         <FomodDialog

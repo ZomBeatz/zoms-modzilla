@@ -283,14 +283,19 @@ impl Nexus {
     }
 
     async fn get<T: for<'de> Deserialize<'de>>(&self, path: &str, query: &[(&str, String)]) -> Result<T, ApiError> {
+        self.call(reqwest::Method::GET, path, query, None).await
+    }
+
+    async fn call<T: for<'de> Deserialize<'de>>(&self, method: reqwest::Method, path: &str, query: &[(&str, String)], form: Option<&[(&str, String)]>) -> Result<T, ApiError> {
         let key = self.key.lock().unwrap().clone().ok_or(ApiError {
             status: 401,
             message: "Add your Nexus Mods API key in Settings first.".into(),
         })?;
-        let res = self
-            .http
-            .get(format!("{}{path}", self.base))
-            .query(query)
+        let mut req = self.http.request(method, format!("{}{path}", self.base)).query(query);
+        if let Some(f) = form {
+            req = req.form(f);
+        }
+        let res = req
             .header("apikey", key)
             .header("Application-Name", APP_NAME)
             .header("Application-Version", APP_VERSION)
@@ -400,6 +405,31 @@ impl Nexus {
             url = list.get(0).and_then(|x| x.get("URI").or_else(|| x.get("uri"))).and_then(|x| x.as_str()).ok_or_else(|| fail("Nexus Mods gave no link for the collection's file.".into()))?.to_string();
         }
         Err(fail("Nexus Mods kept pointing elsewhere for the collection's file.".into()))
+    }
+
+    /// Endorse a mod (or take the endorsement back), for its version you have.
+    pub async fn endorse(&self, game: &str, mod_id: u64, on: bool, version: &str) -> Result<(), ApiError> {
+        let what = if on { "endorse" } else { "abstain" };
+        let _: serde_json::Value = self.call(reqwest::Method::POST, &format!("/v1/games/{game}/mods/{mod_id}/{what}.json"), &[], Some(&[("version", version.to_string())])).await?;
+        Ok(())
+    }
+
+    /// Track a mod on Nexus Mods (its updates show on the site), or stop tracking it.
+    pub async fn track(&self, game: &str, mod_id: u64, on: bool) -> Result<(), ApiError> {
+        let m = if on { reqwest::Method::POST } else { reqwest::Method::DELETE };
+        let _: serde_json::Value = self.call(m, "/v1/user/tracked_mods.json", &[("domain_name", game.to_string())], Some(&[("mod_id", mod_id.to_string())])).await?;
+        Ok(())
+    }
+
+    /// The mods you've endorsed and the ones you track: (game, mod) pairs. Two requests.
+    pub async fn marks(&self) -> Result<(Vec<(String, u64)>, Vec<(String, u64)>), ApiError> {
+        let e: Vec<serde_json::Value> = self.get("/v1/user/endorsements.json", &[]).await?;
+        let t: Vec<serde_json::Value> = self.get("/v1/user/tracked_mods.json", &[]).await?;
+        let pair = |v: &serde_json::Value, g: &str| Some((v.get(g)?.as_str()?.to_string(), v.get("mod_id")?.as_u64()?));
+        Ok((
+            e.iter().filter(|v| v.get("status").and_then(|s| s.as_str()) == Some("Endorsed")).filter_map(|v| pair(v, "domain_name")).collect(),
+            t.iter().filter_map(|v| pair(v, "domain_name")).collect(),
+        ))
     }
 
     pub async fn validate(&self) -> Result<User, ApiError> {

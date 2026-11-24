@@ -1,6 +1,24 @@
 import { useState, type ReactNode } from "react";
 import type { Ctx } from "../App";
 import { PhoneSendButton } from "../PhoneSend";
+import { openUrl } from "../api";
+
+const DOCS = "https://docs.zombeatzmedia.com/modzilla/";
+/** Each guide's full page in the online guide. */
+const MORE: Record<string, string> = {
+  "deck-start": "steam-deck",
+  controls: "keyboard",
+  typing: "steam-deck#typing",
+  "not-showing": "troubleshooting",
+  extenders: "game-tools#steam-s-play-starts-the-script-extender",
+  prefix: "game-tools#windows-parts-in-the-prefix",
+  tools: "game-tools#modding-tools",
+  cloud: "saves#steam-cloud",
+  sd: "library#where-mods-are-kept",
+  battery: "downloads#speed-and-timing",
+  offline: "faq",
+  decky: "steam-deck#the-quick-access-menu",
+};
 
 /** The guides, also named in the AI help's instructions (ai.rs) so it can point to them. */
 export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => ReactNode }[] = [
@@ -154,14 +172,43 @@ export function Guide({ go }: Ctx) {
       <div className="page-head">
         <h1>Help</h1>
       </div>
-      <p className="lead">Short guides for the questions people ask most, with the Steam Deck in mind.</p>
+      <p className="lead">
+        Short guides for the questions people ask most, with the Steam Deck in mind. Everything else is in the{" "}
+        <a
+          href={DOCS}
+          onClick={(e) => {
+            e.preventDefault();
+            void openUrl(DOCS);
+          }}
+        >
+          online guide
+        </a>
+        .
+      </p>
       <div className="guide">
         {GUIDES.map((g) => (
           <section key={g.id} className={`panel guide-item${open === g.id ? " open" : ""}`}>
             <button className="guide-title" aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? "" : g.id)}>
               {g.title}
             </button>
-            {open === g.id && <div className="guide-body">{g.body(go)}</div>}
+            {open === g.id && (
+              <div className="guide-body">
+                {g.body(go)}
+                {MORE[g.id] && (
+                  <p className="small">
+                    <a
+                      href={DOCS + MORE[g.id]}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void openUrl(DOCS + MORE[g.id]);
+                      }}
+                    >
+                      More in the online guide
+                    </a>
+                  </p>
+                )}
+              </div>
+            )}
           </section>
         ))}
       </div>

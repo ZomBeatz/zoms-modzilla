@@ -1,0 +1,62 @@
+# Flathub build of Zom's Nexus, from source. Before building or submitting, generate the
+# offline dependency lists next to this file (see README.md):
+#   cargo-sources.json  (flatpak-cargo-generator.py ../../src-tauri/Cargo.lock)
+#   node-sources.json   (flatpak-node-generator npm ../../package-lock.json)
+id: com.zombeatz.zoms-nexus
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: zoms-nexus
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  # The GPU, and controllers (Steam Deck, gamepads) for controller navigation.
+  - --device=all
+  # Game folders, Steam libraries and the mod library: mods go into games' own folders.
+  - --filesystem=home
+  # SD cards and other drives (Steam Deck: /run/media/<card>).
+  - --filesystem=/run/media
+  - --filesystem=/media
+  - --filesystem=/mnt
+  # Steam, Heroic and Lutris installed as Flatpaks keep their games and settings here.
+  - --filesystem=~/.var/app/com.valvesoftware.Steam
+  - --filesystem=~/.var/app/com.heroicgameslauncher.hgl:ro
+  - --filesystem=~/.var/app/net.lutris.Lutris:ro
+  # Games run on the computer, not in the sandbox: starting them, telling when they're
+  # running and closing them goes through flatpak-spawn --host (see src-tauri/src/host.rs).
+  - --talk-name=org.freedesktop.Flatpak
+  # The Nexus Mods API key in the desktop keyring, notifications, and the tray icon.
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+  env:
+    CARGO_HOME: /run/build/zoms-nexus/cargo
+    CARGO_NET_OFFLINE: 'true'
+    npm_config_cache: /run/build/zoms-nexus/flatpak-node/npm-cache
+    npm_config_offline: 'true'
+    XDG_CACHE_HOME: /run/build/zoms-nexus/flatpak-node/cache
+modules:
+  - name: zoms-nexus
+    buildsystem: simple
+    build-commands:
+      - npm ci --offline
+      - npm run tauri -- build --no-bundle
+      - install -Dm755 src-tauri/target/release/zoms-nexus /app/bin/zoms-nexus
+      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-nexus.desktop /app/share/applications/com.zombeatz.zoms-nexus.desktop
+      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-nexus.metainfo.xml /app/share/metainfo/com.zombeatz.zoms-nexus.metainfo.xml
+      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/com.zombeatz.zoms-nexus.png
+      - install -Dm644 src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/com.zombeatz.zoms-nexus.png
+      - install -Dm644 src-tauri/icons/512x512.png /app/share/icons/hicolor/512x512/apps/com.zombeatz.zoms-nexus.png
+    sources:
+      - type: git
+        url: https://github.com/ZomBeatz/zoms-nexus.git
+        tag: v0.1.0
+      - cargo-sources.json
+      - node-sources.json

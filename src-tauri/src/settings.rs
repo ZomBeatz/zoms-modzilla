@@ -95,6 +95,10 @@ pub struct Settings {
     /// Games whose mods are kept under another folder than the library: game → folder (which
     /// gets a `<game>` folder inside). Changed only by moving them (`library_move_game`).
     pub game_libraries: std::collections::BTreeMap<String, String>,
+    /// Ask GitHub once a day whether a newer Zom's Nexus is out (not in the Flatpak).
+    pub check_app_updates: bool,
+    /// Snapshot a game's saves by itself before each Play (the last 10 are kept).
+    pub snapshot_before_play: bool,
     /// Optional AI help: which service and model (the key is kept apart, in `ai-key`).
     pub ai: Option<crate::ai::AiSettings>,
     /// Activity kinds not to note ("played", "updates"...).
@@ -138,6 +142,8 @@ impl Default for Settings {
             copy_games: vec![],
             game_libraries: Default::default(),
             ai: None,
+            snapshot_before_play: false,
+            check_app_updates: true,
             version: VERSION,
         }
     }

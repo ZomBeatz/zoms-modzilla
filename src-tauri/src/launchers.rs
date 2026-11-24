@@ -220,7 +220,7 @@ pub fn device() -> Device {
     let read = |p: &str| fs::read_to_string(p).map(|s| s.trim().to_string()).unwrap_or_default();
     let vendor = read("/sys/devices/virtual/dmi/id/board_vendor");
     let product = read("/sys/devices/virtual/dmi/id/product_name");
-    let os = read("/etc/os-release").to_lowercase();
+    let os = crate::host::os_release().to_lowercase();
     let env = |k: &str| std::env::var(k).unwrap_or_default();
     Device {
         deck: vendor.eq_ignore_ascii_case("Valve") && matches!(product.as_str(), "Jupiter" | "Galileo"),

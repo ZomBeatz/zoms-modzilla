@@ -119,22 +119,43 @@ pub fn game_in(schema: &Value, steam: Option<u32>, domain: &str, name: &str) -> 
     let r = g["r2modman"].as_array()?.first()?;
     let community = r["packageIndex"].as_str().and_then(|u| u.split("/c/").nth(1)).and_then(|s| s.split('/').next()).unwrap_or(label).to_string();
     let loader = r["packageLoader"].as_str().unwrap_or("none").to_string();
-    let rules = r["installRules"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .map(|x| Rule {
-                    route: x["route"].as_str().unwrap_or("").to_string(),
-                    exts: x["defaultFileExtensions"].as_array().map(|e| e.iter().filter_map(|v| v.as_str().map(str::to_lowercase)).collect()).unwrap_or_default(),
-                    subdir: x["trackingMethod"].as_str() == Some("subdir"),
-                    default: x["isDefaultLocation"].as_bool().unwrap_or(false),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    // Install rules, with sub-routes flattened ("MelonLoader" › "Managed" = "MelonLoader/Managed").
+    fn rules_of(list: &Value, base: &str, out: &mut Vec<Rule>, zipped: &mut bool) {
+        for x in list.as_array().into_iter().flatten() {
+            let route = x["route"].as_str().unwrap_or("");
+            let route = if base.is_empty() { route.to_string() } else { format!("{base}/{route}") };
+            let how = x["trackingMethod"].as_str().unwrap_or("");
+            *zipped |= how == "package-zip";
+            out.push(Rule {
+                route: route.clone(),
+                exts: x["defaultFileExtensions"].as_array().map(|e| e.iter().filter_map(|v| v.as_str().map(str::to_lowercase)).collect()).unwrap_or_default(),
+                subdir: matches!(how, "subdir" | "subdir-no-flatten"),
+                default: x["isDefaultLocation"].as_bool().unwrap_or(false),
+            });
+            rules_of(&x["subRoutes"], &route, out, zipped);
+        }
+    }
+    let mut rules = vec![];
+    let mut zipped = false;
+    rules_of(&r["installRules"], "", &mut rules, &mut zipped);
+    let loader_name = r["packageLoader"].as_str().unwrap_or("none");
+    // Loaders r2modman installs by its own rules, not the ecosystem file's.
+    if rules.is_empty() {
+        let rule = |route: &str, subdir: bool| Rule { route: route.into(), exts: vec![], subdir, default: true };
+        match loader_name {
+            // Mods laid out as they go in the game folder.
+            "recursive-melonloader" => rules.push(rule("", false)),
+            "gdweave" => rules.push(rule("GDWeave/mods", true)),
+            "return-of-modding" => rules.push(rule("ReturnOfModding/plugins", true)),
+            _ => {}
+        }
+    }
     let loaders = schema["modloaderPackages"].as_array().map(|a| a.iter().filter(|p| p["loader"].as_str() == Some(&loader)).filter_map(|p| Some((p["packageId"].as_str()?.to_lowercase(), p["rootFolder"].as_str().unwrap_or("").to_string()))).collect()).unwrap_or_default();
     let r2_folder = r["internalFolderName"].as_str().unwrap_or("").to_string();
-    Some(TsGame { community, name: g["meta"]["displayName"].as_str().unwrap_or(label).to_string(), supported: loader == "bepinex", loader, r2_folder, rules, loaders })
+    // Zom's Nexus can put mods in when it knows where each file goes, and mods are folders
+    // (not zips that go in whole, like Godot's).
+    let supported = !rules.is_empty() && !zipped && loader != "none";
+    Some(TsGame { community, name: g["meta"]["displayName"].as_str().unwrap_or(label).to_string(), supported, loader, r2_folder, rules, loaders })
 }
 
 pub async fn game(http: &reqwest::Client, cache: &Path, steam: Option<u32>, domain: &str, name: &str) -> Result<Option<TsGame>, String> {
@@ -547,16 +568,20 @@ pub fn place(g: &TsGame, full: &str, rel: &str) -> Option<String> {
     if let Some(root) = g.loaders.get(&full.to_lowercase()) {
         return after(root);
     }
-    let under = |rule: &Rule, rest: &str| if rule.subdir { format!("{}/{full}/{rest}", rule.route) } else { format!("{}/{rest}", rule.route) };
+    let under = |rule: &Rule, rest: &str| {
+        let base = if rule.subdir { format!("{}/{full}", rule.route) } else { rule.route.clone() };
+        let base = base.trim_matches('/');
+        if base.is_empty() { rest.to_string() } else { format!("{base}/{rest}") }
+    };
     // "BepInEx/plugins/…" written out in full.
-    for rule in &g.rules {
+    for rule in g.rules.iter().filter(|r| !r.route.is_empty()) {
         if let Some(rest) = after(&rule.route) {
             return Some(under(rule, &rest));
         }
     }
     // "plugins/…", "config/…": the last part of a route.
     if let Some((first, rest)) = rel.split_once('/') {
-        if let Some(rule) = g.rules.iter().find(|r| r.route.rsplit('/').next().is_some_and(|last| last.eq_ignore_ascii_case(first))) {
+        if let Some(rule) = g.rules.iter().find(|r| !r.route.is_empty() && r.route.rsplit('/').next().is_some_and(|last| last.eq_ignore_ascii_case(first))) {
             return Some(under(rule, rest));
         }
     }
@@ -775,6 +800,36 @@ mod tests {
         assert_eq!(v, "2.0.0");
         assert!(now.contains(&(mod_id("A-Mod"), file_id("A-Mod-2.0.0"))) && now.contains(&(mod_id("C-New"), file_id("C-New-1.0.0"))));
         assert_eq!(gone, vec![mod_id("B-Old")]);
+    }
+
+    #[test]
+    fn other_loaders_place_files_too() {
+        let schema: Value = serde_json::json!({
+            "games": {
+                "mel": { "meta": { "displayName": "Mel" }, "distributions": [], "r2modman": [{ "packageIndex": "https://thunderstore.io/c/mel/api/v1/package-listing-index/", "packageLoader": "melonloader",
+                    "installRules": [
+                        { "route": "Mods", "defaultFileExtensions": [".dll"], "trackingMethod": "state", "isDefaultLocation": false, "subRoutes": [] },
+                        { "route": "UserData/ModManager", "defaultFileExtensions": [], "trackingMethod": "subdir-no-flatten", "isDefaultLocation": true, "subRoutes": [] },
+                        { "route": "UserLibs", "defaultFileExtensions": [".lib.dll"], "trackingMethod": "state", "isDefaultLocation": false, "subRoutes": [] },
+                        { "route": "MelonLoader", "defaultFileExtensions": [], "trackingMethod": "state", "isDefaultLocation": false, "subRoutes": [{ "route": "Managed", "defaultFileExtensions": [".managed.dll"], "trackingMethod": "state", "isDefaultLocation": false, "subRoutes": [] }] }
+                    ] }] },
+                "rec": { "meta": { "displayName": "Rec" }, "distributions": [], "r2modman": [{ "packageIndex": "https://thunderstore.io/c/rec/api/v1/package-listing-index/", "packageLoader": "recursive-melonloader", "installRules": [] }] },
+                "god": { "meta": { "displayName": "God" }, "distributions": [], "r2modman": [{ "packageIndex": "https://thunderstore.io/c/god/api/v1/package-listing-index/", "packageLoader": "godotml", "installRules": [{ "route": "mods", "trackingMethod": "package-zip", "isDefaultLocation": true }] }] }
+            },
+            "modloaderPackages": [{ "packageId": "LavaGang-MelonLoader", "rootFolder": "", "loader": "melonloader" }]
+        });
+        let mel = game_in(&schema, None, "mel", "").unwrap();
+        assert!(mel.supported);
+        assert_eq!(place(&mel, "A-Gun", "Gun.dll").as_deref(), Some("Mods/Gun.dll"));
+        assert_eq!(place(&mel, "A-Gun", "Helper.lib.dll").as_deref(), Some("UserLibs/Helper.lib.dll"));
+        assert_eq!(place(&mel, "A-Gun", "x.managed.dll").as_deref(), Some("MelonLoader/Managed/x.managed.dll"));
+        assert_eq!(place(&mel, "A-Gun", "notes/thing.json").as_deref(), Some("UserData/ModManager/A-Gun/notes/thing.json"));
+        assert_eq!(place(&mel, "LavaGang-MelonLoader", "MelonLoader/net6/x.dll").as_deref(), Some("MelonLoader/net6/x.dll"));
+        assert_eq!(place(&mel, "LavaGang-MelonLoader", "version.dll").as_deref(), Some("version.dll"));
+        let rec = game_in(&schema, None, "rec", "").unwrap();
+        assert!(rec.supported);
+        assert_eq!(place(&rec, "A-B", "Mods/B.dll").as_deref(), Some("Mods/B.dll"));
+        assert!(!game_in(&schema, None, "god", "").unwrap().supported, "zips that go in whole aren't yet");
     }
 
     #[test]

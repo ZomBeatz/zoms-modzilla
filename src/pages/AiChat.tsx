@@ -4,14 +4,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send } from "lucide-react";
-import { api, type Profile } from "../api";
+import { api, on, type Profile } from "../api";
+import { actionLabel, splitActions, type AiAction } from "../aiactions";
 import { Dialog } from "../ui";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const STARTERS = ["Why won't the game start?", "Why did the game crash last time?", "Read the logs and tell me what's wrong.", "Which of my mods are likely out of date?", "Is my load order OK?"];
 
-export function AiChat({ profile, onClose, onSetup }: { profile: Profile; onClose: () => void; onSetup: () => void }) {
+export function AiChat({ profile, onClose, onSetup, onAction }: { profile: Profile; onClose: () => void; onSetup: () => void; onAction: (a: AiAction) => Promise<string> }) {
   const [ready, setReady] = useState<boolean | null>(null);
   const [context, setContext] = useState("");
   const [showCtx, setShowCtx] = useState(false);
@@ -19,14 +20,24 @@ export function AiChat({ profile, onClose, onSetup }: { profile: Profile; onClos
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [live, setLive] = useState("");
+  const [done, setDone] = useState<Record<string, string>>({});
+  const asking = useRef("");
   const end = useRef<HTMLDivElement>(null);
+  // The answer as it's written.
+  useEffect(() => {
+    const off = on<{ id: string; text: string }>("ai:text", (p) => {
+      if (p.id === asking.current) setLive((t) => t + p.text);
+    });
+    return () => void off.then((f) => f());
+  }, []);
   useEffect(() => {
     api.aiStatus().then((s) => setReady(!!s.settings && (s.hasKey || s.settings.provider !== "anthropic")), () => setReady(false));
     api.aiContext(profile.id, null).then(setContext, (e) => setError((e as Error).message));
   }, [profile.id]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [msgs, busy]);
+  }, [msgs, busy, live]);
   const send = async (text: string) => {
     const t = text.trim();
     if (!t || busy) return;
@@ -35,14 +46,18 @@ export function AiChat({ profile, onClose, onSetup }: { profile: Profile; onClos
     setQ("");
     setBusy(true);
     setError("");
+    setLive("");
+    asking.current = `${Date.now()}`;
     try {
-      const reply = await api.aiAsk(context, next);
+      const reply = await api.aiAsk(context, next, asking.current);
       setMsgs([...next, { role: "assistant", content: reply }]);
     } catch (e) {
       setError((e as Error).message);
       setMsgs(msgs);
       setQ(t);
     } finally {
+      asking.current = "";
+      setLive("");
       setBusy(false);
     }
   };
@@ -75,12 +90,40 @@ export function AiChat({ profile, onClose, onSetup }: { profile: Profile; onClos
                 ))}
               </div>
             )}
-            {msgs.map((m, i) => (
-              <div key={i} className={`ai-msg ${m.role}`}>
-                {m.content}
-              </div>
-            ))}
-            {busy && <div className="ai-msg assistant muted">Reading your setup…</div>}
+            {msgs.map((m, i) => {
+              const { text, actions } = m.role === "assistant" ? splitActions(m.content) : { text: m.content, actions: [] };
+              return (
+                <div key={i} className={`ai-msg ${m.role}`}>
+                  {text}
+                  {actions.length > 0 && (
+                    <div className="ai-actions">
+                      {actions.map((a, j) => {
+                        const k = `${i}:${j}`;
+                        return done[k] ? (
+                          <span key={k} className="ok-text small">{done[k]}</span>
+                        ) : (
+                          <button
+                            key={k}
+                            className="btn sm"
+                            onClick={async () => {
+                              try {
+                                const said = await onAction(a);
+                                setDone((d) => ({ ...d, [k]: said }));
+                              } catch (e) {
+                                setError((e as Error).message);
+                              }
+                            }}
+                          >
+                            {actionLabel(a)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {busy && <div className={`ai-msg assistant${live ? "" : " muted"}`}>{live ? splitActions(live).text : "Reading your setup…"}</div>}
             <div ref={end} />
           </div>
           {error && <p className="err-text small">{error}</p>}
@@ -108,7 +151,7 @@ export function AiChat({ profile, onClose, onSetup }: { profile: Profile; onClos
               <Send size={15} /> Send
             </button>
           </form>
-          <p className="muted small">AI answers can be wrong. The app's own buttons (Switch off, Find the problem mod, Play without mods) undo cleanly, so try things there.</p>
+          <p className="muted small">AI answers can be wrong. Its suggestions are buttons you choose to press, and each one undoes cleanly (Switch off has Undo; Find the problem mod puts everything back).</p>
         </div>
       )}
     </Dialog>

@@ -18,6 +18,7 @@ mod activity;
 mod ai;
 mod art;
 mod backup;
+mod bg3;
 mod check;
 mod collections;
 mod deploy;
@@ -28,11 +29,13 @@ mod fomod;
 mod gamepad;
 mod games;
 mod history;
+mod host;
 mod launchers;
 mod launchopts;
 mod layers;
 mod library;
 mod loaders;
+mod loot;
 mod log;
 mod modsettings;
 mod mo2;
@@ -44,8 +47,10 @@ mod nxm;
 mod order;
 mod profiles;
 mod queue;
+mod release;
 mod requirements;
 mod saves;
+mod snapshots;
 mod settings;
 mod steamshortcut;
 mod system;
@@ -1590,6 +1595,7 @@ async fn profile_check(app: State<'_, App>, id: String) -> Res<check::Report> {
     };
     let ours: HashSet<String> = deploy::deployed(&app.data_dir, &p.game).files.iter().map(|f| f.to_lowercase()).collect();
     let p2 = p.clone();
+    let data2 = app.data_dir.clone();
     let (mut report, mods) = tokio::task::spawn_blocking(move || {
         let mods = library::list(&lib);
         let mut r = check::check(&p2, &mods, &folder, root.as_deref(), &ours);
@@ -1598,6 +1604,7 @@ async fn profile_check(app: State<'_, App>, id: String) -> Res<check::Report> {
             r.loaders_missing = loaders::missing(root, &r.owners);
             r.loaders = loaders::present(root, &r.owners);
         }
+        check::use_order(&mut r, &loot::saved(&data2, &p2.id));
         (r, mods)
     })
     .await
@@ -1833,7 +1840,27 @@ async fn apply_profile(app: &App, id: &str) -> Res<deploy::Applied> {
     let applied = tokio::task::spawn_blocking(move || {
         auto_install(&lib, &data2, &p2, &root, &folder);
         let mods = library::list(&lib);
-        deploy::apply(&data, &deploy::Target { game: &game, root: &root, mod_folder: &folder, prefix: prefix.as_deref(), copy }, &p2, &mods)
+        let applied = deploy::apply(&data, &deploy::Target { game: &game, root: &root, mod_folder: &folder, prefix: prefix.as_deref(), copy }, &p2, &mods)?;
+        // Baldur's Gate 3: .pak mods go in its Mods folder in the prefix, and on its mod list.
+        if game == bg3::GAME {
+            if let Some(pfx) = prefix.as_deref() {
+                let dirs: Vec<PathBuf> = p2
+                    .mods
+                    .iter()
+                    .filter(|pm| pm.enabled)
+                    .filter_map(|pm| {
+                        let m = mods.iter().find(|m| m.game == game && m.mod_id == pm.mod_id)?;
+                        let f = m.files.iter().find(|f| f.file_id == pm.file_id)?;
+                        deploy::unpacked_dir(m, f).ok()
+                    })
+                    .collect();
+                let (_, unknown) = bg3::apply(&data, pfx, &dirs, copy || !deploy::same_drive(&lib, pfx))?;
+                if !unknown.is_empty() {
+                    log::warn(&format!("Baldur's Gate 3: no mod details in {} (put in, but not on the mod list)", unknown.join(", ")));
+                }
+            }
+        }
+        Ok::<_, String>(applied)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -1997,13 +2024,23 @@ async fn clear_game(app: &App, game: String) -> Res<()> {
         }
     }
     let data = app.data_dir.clone();
-    tokio::task::spawn_blocking(move || deploy::clear(&data, &game, &root)).await.map_err(|e| e.to_string())?
+    let prefix = g.proton_prefix.clone().map(PathBuf::from);
+    tokio::task::spawn_blocking(move || {
+        if game == bg3::GAME {
+            if let Some(pfx) = prefix.as_deref() {
+                bg3::clear(&data, pfx)?;
+            }
+        }
+        deploy::clear(&data, &game, &root)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn launch(handle: &AppHandle, g: &games::Game) -> Res<()> {
     if let Some(cmd) = &g.launch {
         let dir = g.path.clone().unwrap_or_else(|| ".".into());
-        std::process::Command::new("sh").arg("-c").arg(cmd).current_dir(dir).spawn().map_err(|e| format!("Couldn't start the game: {e}"))?;
+        host::command("sh").arg("-c").arg(cmd).current_dir(dir).spawn().map_err(|e| format!("Couldn't start the game: {e}"))?;
         return Ok(());
     }
     let app_id = g.steam_app_id.ok_or("Add a start command for this game on the Games page, or start it yourself.")?;
@@ -2033,6 +2070,13 @@ async fn profile_play(handle: AppHandle, app: State<'_, App>, id: String) -> Res
     let result = async {
         let applied = apply_profile(&app, &id).await?;
         let (_, _, _, g) = game_target(&app, &p.game)?;
+        // A snapshot of the saves about to be played, when asked for, before the game can
+        // write to them (never stops Play).
+        let snap = app.settings.lock().unwrap().snapshot_before_play;
+        if let (true, Some(live)) = (snap, g.save_folder.clone().map(PathBuf::from)) {
+            let (data, game, owner, label) = (app.data_dir.clone(), p.game.clone(), saves::owner(&live), format!("Before playing “{}”", p.name));
+            let _ = tokio::task::spawn_blocking(move || snapshots::take(&data, &game, &live, &owner, &label, true)).await;
+        }
         launch(&handle, &g)?;
         Ok::<_, String>((applied, g))
     }
@@ -2572,7 +2616,7 @@ async fn steam_add(restart: bool) -> Res<bool> {
         if !restart {
             return Err("steamRunning".into());
         }
-        let _ = std::process::Command::new("steam").arg("-shutdown").spawn().or_else(|_| std::process::Command::new("xdg-open").arg("steam://exit").spawn());
+        let _ = host::command("steam").arg("-shutdown").spawn().or_else(|_| host::command("xdg-open").arg("steam://exit").spawn());
         for _ in 0..60 {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             if !steamshortcut::steam_running() {
@@ -2596,7 +2640,7 @@ async fn steam_add(restart: bool) -> Res<bool> {
     let was = tokio::task::spawn_blocking(move || steamshortcut::install(&user, &exe, &art)).await.map_err(|e| e.to_string())??;
     log::info(&format!("Added to Steam's library ({})", if was { "updated" } else { "new" }));
     if closed {
-        let _ = std::process::Command::new("steam").spawn().or_else(|_| std::process::Command::new("flatpak").args(["run", "com.valvesoftware.Steam"]).spawn());
+        let _ = host::command("steam").spawn().or_else(|_| host::command("flatpak").args(["run", "com.valvesoftware.Steam"]).spawn());
     }
     Ok(was)
 }
@@ -2647,7 +2691,7 @@ async fn ai_context(app: State<'_, App>, profile: Option<String>, game: Option<S
     let mods = library::list(&lib_dir(&app));
     let dev = launchers::device();
     let mut t = String::new();
-    let os = fs::read_to_string("/etc/os-release").ok().and_then(|o| o.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=")).map(|v| v.trim_matches('"').to_string())).unwrap_or_else(|| "Linux".into());
+    let os = Some(host::os_release()).and_then(|o| o.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=")).map(|v| v.trim_matches('"').to_string())).unwrap_or_else(|| "Linux".into());
     let _ = writeln!(t, "App: Zom's Nexus {} on {os}{}{}", nexus::APP_VERSION, if dev.deck { ", Steam Deck" } else { "" }, if dev.game_mode { " (Game Mode)" } else { "" });
     if let Some(g) = &g {
         let _ = writeln!(t, "\n## Game: {} ({})", g.name, g.domain);
@@ -2742,15 +2786,131 @@ async fn ai_context(app: State<'_, App>, profile: Option<String>, game: Option<S
     Ok(out)
 }
 
-/// Ask the AI, with the context the person saw.
+/// Ask the AI, with the context the person saw. The answer streams as `ai:text` events
+/// ({ id, text }) and comes back whole at the end.
 #[tauri::command]
-async fn ai_ask(app: State<'_, App>, context: String, messages: Vec<ai::Message>) -> Res<String> {
+async fn ai_ask(handle: AppHandle, app: State<'_, App>, context: String, messages: Vec<ai::Message>, id: Option<String>) -> Res<String> {
     let s = app.settings.lock().unwrap().ai.clone().ok_or("Set up AI help in Settings first.")?;
     if context.len() > 400_000 || messages.iter().map(|m| m.content.len()).sum::<usize>() > 400_000 {
         return Err("That's more than the AI can take at once. Start a new chat.".into());
     }
     let key = ai::load_key(&app.config_dir);
-    ai::ask(app.nexus.http(), &s, key.as_deref(), &context, &messages).await
+    let id = id.unwrap_or_default();
+    ai::ask(app.nexus.http(), &s, key.as_deref(), &context, &messages, |t| {
+        let _ = handle.emit("ai:text", serde_json::json!({ "id": id, "text": t }));
+    })
+    .await
+}
+
+/// A game's save folder now, and whose saves are in it.
+fn live_saves(app: &App, game: &str) -> Res<(PathBuf, String, games::Game)> {
+    let g = list_games(app).into_iter().find(|g| g.domain == game).ok_or("That game isn't on the Games page.")?;
+    let live = g.save_folder.clone().map(PathBuf::from).ok_or("Zom's Nexus doesn't know where this game keeps its saves. Set the save folder on the Games page.")?;
+    let owner = saves::owner(&live);
+    Ok((live, owner, g))
+}
+
+#[tauri::command]
+fn snapshot_list(app: State<'_, App>, game: String) -> Vec<snapshots::Snapshot> {
+    snapshots::list(&app.data_dir, &game)
+}
+
+#[tauri::command]
+async fn snapshot_take(app: State<'_, App>, game: String, label: String) -> Res<snapshots::Snapshot> {
+    let (live, owner, _) = live_saves(&app, &game)?;
+    let data = app.data_dir.clone();
+    let label = if label.trim().is_empty() { "Snapshot".to_string() } else { label.trim().to_string() };
+    tokio::task::spawn_blocking(move || snapshots::take(&data, &game, &live, &owner, &label, false)).await.map_err(|e| e.to_string())?
+}
+
+/// Put a snapshot's saves back (the ones there now are kept: snapshotted and moved aside).
+#[tauri::command]
+async fn snapshot_restore(app: State<'_, App>, game: String, id: String) -> Res<snapshots::Snapshot> {
+    let (live, owner, g) = live_saves(&app, &game)?;
+    if g.path.as_deref().is_some_and(|p| activity::running(Path::new(p))) {
+        return Err("The game is running: close it first, so it doesn't write over the saves.".into());
+    }
+    let data = app.data_dir.clone();
+    let s = tokio::task::spawn_blocking(move || snapshots::restore(&data, &game, &live, &owner, &id)).await.map_err(|e| e.to_string())??;
+    log::info(&format!("Restored a save snapshot ({})", s.label));
+    Ok(s)
+}
+
+#[tauri::command]
+fn snapshot_delete(app: State<'_, App>, game: String, id: String) -> Res<()> {
+    snapshots::delete(&app.data_dir, &game, &id)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LootProposal {
+    now: Vec<String>,
+    sorted: loot::Sorted,
+}
+
+/// What LOOT's masterlist says about a profile's plugins: the order it would load them in, and
+/// its notes. Nothing changes until `loot_apply`.
+#[tauri::command]
+async fn loot_sort(app: State<'_, App>, id: String) -> Res<LootProposal> {
+    let p = find_profile(&app, &id)?;
+    let (root, folder, _, _) = game_target(&app, &p.game)?;
+    let ml = loot::masterlist(app.nexus.http(), &app.cache_dir, &p.game).await?;
+    let lib = lib_dir(&app);
+    let data = app.data_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        let mods = library::list(&lib);
+        let mut r = check::check(&p, &mods, &folder, Some(&root), &HashSet::new());
+        check::use_order(&mut r, &loot::saved(&data, &p.id));
+        let files: std::collections::HashMap<String, PathBuf> = r.plugin_files.iter().map(|(n, _, f)| (n.to_lowercase(), f.clone())).collect();
+        let plugins: Vec<loot::Plugin> = r
+            .load_order
+            .iter()
+            .filter_map(|n| {
+                let f = files.get(&n.to_lowercase())?;
+                let crc = fs::metadata(f).ok().filter(|m| m.len() < 64 * 1024 * 1024).and_then(|_| fs::read(f).ok()).map(|b| steamshortcut::crc32(&b));
+                Some(loot::Plugin { name: n.clone(), master: check::is_master(f), masters: check::masters(f), crc })
+            })
+            .collect();
+        // What the game has in its data folder (its own plugins, and what mods put there).
+        let data_dir = root.join(&folder);
+        let have: HashSet<String> = fs::read_dir(&data_dir).into_iter().flatten().flatten().map(|e| e.file_name().to_string_lossy().to_lowercase()).chain(files.keys().cloned()).collect();
+        let sorted = loot::sort(&ml, &plugins, &|f| have.contains(&f.to_lowercase()));
+        LootProposal { now: plugins.iter().map(|p| p.name.clone()).collect(), sorted }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Keep this plugin order for the profile (or go back to the mod order with `None`). It's used
+/// the next time the mods go in.
+#[tauri::command]
+fn loot_apply(app: State<'_, App>, id: String, order: Option<Vec<String>>) -> Res<()> {
+    let p = find_profile(&app, &id)?;
+    if let Some(o) = &order {
+        if o.len() > 10_000 || o.iter().any(|n| n.contains(['/', '\\']) || n.len() > 260) {
+            return Err("That isn't a plugin list.".into());
+        }
+    }
+    loot::save(&app.data_dir, &p.id, order.as_deref())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppUpdate {
+    /// A newer release, when there is one.
+    release: Option<release::Release>,
+    /// Installed from Flathub: it updates the app.
+    flatpak: bool,
+    version: String,
+}
+
+/// Whether a newer Zom's Nexus is out (asked at most once a day, when the setting is on).
+#[tauri::command]
+async fn app_update(app: State<'_, App>) -> Res<AppUpdate> {
+    let flatpak = host::in_flatpak();
+    let on = app.settings.lock().unwrap().check_app_updates;
+    let release = if flatpak || !on { None } else { release::check(app.nexus.http(), &app.cache_dir, nexus::APP_VERSION).await };
+    Ok(AppUpdate { release, flatpak, version: nexus::APP_VERSION.to_string() })
 }
 
 /// What's in a Mod Organizer 2 folder: its profiles and how many mods.
@@ -2915,9 +3075,9 @@ struct LinkStatus {
 
 #[tauri::command]
 fn nxm_status() -> LinkStatus {
-    let out = std::process::Command::new("xdg-mime").args(["query", "default", "x-scheme-handler/nxm"]).output();
+    let out = host::command("xdg-mime").args(["query", "default", "x-scheme-handler/nxm"]).output();
     let current = out.ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-    let ours = current == NXM_DESKTOP || current == "zoms-nexus.desktop" || current == "Zom's Nexus.desktop";
+    let ours = current == NXM_DESKTOP || current == FLATPAK_DESKTOP || current == "zoms-nexus.desktop" || current == "Zom's Nexus.desktop";
     LinkStatus { ours, other: (!ours && !current.is_empty()).then_some(current) }
 }
 
@@ -2930,8 +3090,19 @@ async fn system_check(app: State<'_, App>) -> Res<system::Report> {
     Ok(system::check(tray, links, steam, &lib_dir(&app)))
 }
 
+/// The desktop file Flathub installs (it lists nxm links itself).
+const FLATPAK_DESKTOP: &str = "com.zombeatz.zoms-nexus.desktop";
+
 #[tauri::command]
 fn nxm_register() -> Res<LinkStatus> {
+    // From Flathub: the installed desktop file already handles nxm links; just make it the one.
+    if host::in_flatpak() {
+        let ok = host::command("xdg-mime").args(["default", FLATPAK_DESKTOP, "x-scheme-handler/nxm"]).status().map(|s| s.success()).unwrap_or(false);
+        if !ok {
+            return Err("Couldn't set Zom's Nexus as the program for Nexus Mods links.".into());
+        }
+        return Ok(nxm_status());
+    }
     let dir = applications_dir().ok_or("Couldn't find your applications folder.")?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let exe = program()?;
@@ -3484,6 +3655,13 @@ pub fn run() {
             ai_context,
             ai_ask,
             open_steam,
+            snapshot_list,
+            snapshot_take,
+            snapshot_restore,
+            snapshot_delete,
+            loot_sort,
+            loot_apply,
+            app_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Zom's Nexus");

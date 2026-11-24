@@ -5,7 +5,7 @@ fn main() {
         .expect("failed to run the Tauri build script");
 }
 
-const COMMANDS: [&str; 128] = [
+const COMMANDS: [&str; 135] = [
     "get_overview",
     "save_settings",
     "set_api_key",
@@ -134,4 +134,11 @@ const COMMANDS: [&str; 128] = [
     "ai_context",
     "ai_ask",
     "open_steam",
+    "snapshot_list",
+    "snapshot_take",
+    "snapshot_restore",
+    "snapshot_delete",
+    "loot_sort",
+    "loot_apply",
+    "app_update",
 ];

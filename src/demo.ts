@@ -424,6 +424,7 @@ function demoLayers(p: Profile) {
   return { base: { slug: p.base.slug, revision: p.base.revision, name: p.base.name, count: p.base.files.length }, collection: p.collection, revision: p.base.revision, addons: ((p.addons ?? []) as DemoAddon[]).map(view), yours: view(demoYours(p)), names };
 }
 let demoSteamAdded = false;
+let demoSnaps = [{ game: "frostrim", id: "1700000000", at: Math.floor(Date.now() / 1000) - 86400, label: "Before trying Snowy North", owner: "shared", files: 24, size: 96_000_000, auto: false }];
 let demoAi: { provider: string; model: string; baseUrl?: string } | null = null;
 
 // A made-up tModLoader with Workshop mods.
@@ -978,6 +979,24 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       emit("checks:changed", 0);
       return r;
     }
+    case "app_update":
+      return { release: null, flatpak: false, version: "0.1.0" };
+    case "loot_sort":
+      return { now: ["Pine Forest.esp", "Frostrim Patch.esp", "Quiet Footsteps.esp"], sorted: { order: ["Frostrim Patch.esp", "Pine Forest.esp", "Quiet Footsteps.esp"], changed: true, unknown: 1, notes: [{ plugin: "Frostrim Patch.esp", kind: "warn", text: "Needs cleaning: 12 identical-to-master records. Clean it with FrostEdit (Quick Auto Clean)." }, { plugin: "Quiet Footsteps.esp", kind: "say", text: "Use the patch for Pine Forest too." }] } };
+    case "loot_apply":
+      return null;
+    case "snapshot_list":
+      return demoSnaps.filter((x) => x.game === a.game);
+    case "snapshot_take": {
+      const s = { game: String(a.game), id: String(Date.now()), at: now(), label: String(a.label || "Snapshot"), owner: "shared", files: 12, size: 48_000_000, auto: false };
+      demoSnaps = [s, ...demoSnaps];
+      return s;
+    }
+    case "snapshot_restore":
+      return demoSnaps.find((x) => x.id === a.id);
+    case "snapshot_delete":
+      demoSnaps = demoSnaps.filter((x) => x.id !== a.id);
+      return null;
     case "ai_status":
       return { settings: demoAi, hasKey: !!demoAi };
     case "ai_set":
@@ -989,7 +1008,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     }
     case "ai_ask":
       await new Promise((r) => setTimeout(r, 700));
-      return "The most likely cause is Quiet Footsteps: SKSE's log says its plugin was made for another version of the game, and the game started closing right after you updated it.\n\n1. On the profile, press Switch off next to Quiet Footsteps.\n2. Press Play. If the game starts, look for a newer Quiet Footsteps on its page (Update in the check).\n3. If it still closes, use Find the problem mod.";
+      return "The most likely cause is Quiet Footsteps: SKSE's log says its plugin was made for another version of the game, and the game started closing right after you updated it.\n\n1. Switch off Quiet Footsteps.\n2. Press Play. If the game starts, look for a newer Quiet Footsteps on its page (Update in the check).\n3. If it still closes, use Find the problem mod.\n\n```actions\n[{\"do\": \"switchOff\", \"mod\": \"Quiet Footsteps\"}, {\"do\": \"findProblem\"}]\n```";
     case "open_steam":
       return null;
     case "steam_entry":

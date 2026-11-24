@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, Merge, CirclePlay, FolderInput, SlidersHorizontal, ArrowDown, ClipboardPaste, Share2, SearchCheck, ArrowDownToLine, Columns2, History as HistoryIcon, X, ArrowUp, Check, ChevronDown, ChevronRight, Copy, FileDown, FileUp, GripVertical, Layers, Play, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, Bot, Camera, Merge, CirclePlay, FolderInput, SlidersHorizontal, ArrowDown, ClipboardPaste, Share2, SearchCheck, ArrowDownToLine, Columns2, History as HistoryIcon, X, ArrowUp, Check, ChevronDown, ChevronRight, Copy, FileDown, FileUp, GripVertical, Layers, Play, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
 import { rememberUpdates } from "../progress";
 import { NoteDialog } from "./NoteDialog";
 import { api, isDesktop, modUrl, openUrl, pickFile, pickSave, type Applied, type CheckReport, type Game, type PlayTime, type Profile, type StoredMod, type Update, on, playWithoutMods } from "../api";
@@ -20,6 +20,9 @@ import { ModSettings } from "./ModSettings";
 import { merge } from "../merge";
 import { TsUpdates } from "./TsUpdates";
 import { AiChat } from "./AiChat";
+import { sameName } from "../aiactions";
+import { SaveSnapshots } from "./SaveSnapshots";
+import { LOOT_GAMES, LootSort } from "./LootSort";
 import { Mo2Import } from "./Mo2Import";
 import { R2Import } from "./R2Import";
 import { requestPlay } from "../SavesGate";
@@ -775,6 +778,8 @@ export function Profiles({ game, setGame, toast, libraryVersion, go, reloadGames
   const [editing, setEditing] = useState(false);
   const [merging, setMerging] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  const [sorting, setSorting] = useState(false);
   const [protons, setProtons] = useState<string[]>([]);
   useEffect(() => {
     api.customProtons().then(setProtons, () => {});
@@ -1228,6 +1233,16 @@ export function Profiles({ game, setGame, toast, libraryVersion, go, reloadGames
                 {(profiles ?? []).some((x) => x.game === open.game && x.id !== open.id) && (
                   <button className="btn ghost" title="Add another profile's mods to this one" onClick={() => setMerging(true)}>
                     <Merge size={15} /> Add a profile's mods…
+                  </button>
+                )}
+                {(LOOT_GAMES.includes(open.game) || (!isDesktop && open.game === "frostrim")) && (
+                  <button className="btn ghost" title="Sort the plugins with LOOT's community masterlist, and see its notes" onClick={() => setSorting(true)}>
+                    <ArrowDownUp size={15} /> Sort plugins (LOOT)…
+                  </button>
+                )}
+                {openGame?.saveFolder && (
+                  <button className="btn ghost" title="Keep a copy of the game's saves before trying risky mods, and put it back in a click" onClick={() => setSnapping(true)}>
+                    <Camera size={15} /> Save snapshots…
                   </button>
                 )}
                 <button className="btn ghost" title="Ask an AI about this profile: crashes, logs, which mod to blame (optional, set up in Settings)" onClick={() => setAsking(true)}>
@@ -1742,9 +1757,43 @@ export function Profiles({ game, setGame, toast, libraryVersion, go, reloadGames
       )}
       {comparing && open && <CompareDialog a={open} profiles={profiles ?? []} name={(id) => modName(id) ?? facts[factKey(open.game, id)]?.name ?? `Mod ${id}`} onClose={() => setComparing(false)} />}
       {ruling !== null && open && <RuleDialog profile={open} modId={ruling} name={(id) => modName(id) ?? `Mod ${id}`} onClose={() => setRuling(null)} onSave={(p) => void save(p, "Added the rule")} />}
+      {sorting && open && <LootSort profile={open} sorted={!!checks[open.id]?.sortedOrder} toast={toast} onClose={() => setSorting(false)} onApplied={() => void check()} />}
+      {snapping && open && <SaveSnapshots game={open.game} gameName={openGame?.name ?? open.game} toast={toast} onClose={() => setSnapping(false)} />}
       {asking && open && (
         <AiChat
           profile={open}
+          onAction={async (a) => {
+            switch (a.do) {
+              case "switchOff":
+              case "switchOn": {
+                const on = a.do === "switchOn";
+                const pm = open.mods.find((m) => sameName(modName(m.modId) ?? "", a.mod ?? ""));
+                if (!pm) throw new Error(`“${a.mod}” isn't in this profile.`);
+                const name = modName(pm.modId) ?? a.mod ?? "";
+                const also = on || open.manualRequirements ? [] : needersOf(pm.modId, open.game, open.mods, facts);
+                await save({ ...open, mods: open.mods.map((x) => (x.modId === pm.modId || also.includes(x.modId) ? { ...x, enabled: on } : x)) }, `${on ? "Switched on" : "Switched off"} “${name}”${also.length ? ` and what needs it (${also.length})` : ""}`);
+                return on ? `Switched on ${name}` : `Switched off ${name}${also.length ? ` (+${also.length})` : ""}`;
+              }
+              case "findProblem": {
+                if (halving) return "Already finding the problem mod";
+                const h = startHalving(open.mods, needsOf);
+                setAsking(false);
+                await halvingStep(h, `Round 1: ${plural(h.suspects.length - h.on.length, "mod")} switched off. Play, then say whether the problem is still there.`);
+                return "Started";
+              }
+              case "playWithoutMods":
+                await playWithoutMods(open.game);
+                return "Starting without mods";
+              case "checkAgain":
+                setAsking(false);
+                await check();
+                return "Checked";
+              case "modSettings":
+                setAsking(false);
+                setEditing(true);
+                return "Opened";
+            }
+          }}
           onClose={() => setAsking(false)}
           onSetup={() => {
             setAsking(false);

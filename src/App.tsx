@@ -2,6 +2,8 @@ import { SavesGate, requestPlay } from "./SavesGate";
 import { applyUi, deckOn } from "./deck";
 import { setGameRunning, setPadActions, startPad } from "./pad";
 import { PadHints } from "./PadHints";
+import { DeckSetup } from "./DeckSetup";
+import { UpdateBanner } from "./UpdateBanner";
 import { Palette } from "./Palette";
 import { wantProfile } from "./nav";
 import { GonePrompt } from "./pages/GoneGames";
@@ -437,7 +439,9 @@ export default function App({ first }: { first: Overview }) {
         </div>
       </nav>
       {deck && <PadHints />}
+      <DeckSetup games={games} hasKey={overview.hasKey} toast={toast} goSettings={() => go("settings")} reloadGames={reloadGames} />
       <main className="main">
+        {isDesktop && <UpdateBanner />}
         {!isDesktop && (
           <div className="banner demo-banner">
             <b>Live demo.</b> Try anything. Changes are only kept in this browser tab, and downloads are pretend.{" "}

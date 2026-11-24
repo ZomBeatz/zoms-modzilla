@@ -108,7 +108,7 @@ pub fn write(top: &[(String, Node)]) -> Vec<u8> {
     out
 }
 
-fn crc32(data: &[u8]) -> u32 {
+pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xffff_ffffu32;
     for &b in data {
         crc ^= b as u32;
@@ -198,9 +198,7 @@ pub fn user_dir() -> Option<PathBuf> {
 
 /// Steam is running (it rewrites the file when it closes).
 pub fn steam_running() -> bool {
-    fs::read_dir("/proc").into_iter().flatten().flatten().any(|e| {
-        e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()) && fs::read_to_string(e.path().join("comm")).map(|c| matches!(c.trim(), "steam" | "steamwebhelper")).unwrap_or(false)
-    })
+    crate::host::processes().iter().any(|p| matches!(p.comm.as_str(), "steam" | "steamwebhelper"))
 }
 
 /// The program Steam should start: the AppImage when running from one, else this program.

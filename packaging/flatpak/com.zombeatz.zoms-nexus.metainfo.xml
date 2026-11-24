@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.zombeatz.zoms-nexus</id>
+  <name>Zom's Nexus</name>
+  <summary>Mod manager for Linux and the Steam Deck</summary>
+  <developer id="com.zombeatzmedia">
+    <name>ZomBeatz Media</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Every mod you download, kept in order. Zom's Nexus gets mods from Nexus Mods and Thunderstore, keeps them in a tidy library, and puts them into your games as profiles you can switch between, without touching the game's own files.</p>
+    <ul>
+      <li>Nexus Mods downloads and collections, Thunderstore mods and mod packs, Mod Organizer 2 and r2modman profiles brought across</li>
+      <li>Profiles per game, with a conflict check, LOOT plugin sorting, mod installers and each profile's own mod settings and saves</li>
+      <li>When a game won't start: it reads the mod loaders' logs, shows what changed since the game last ran fine, and finds the mod at fault</li>
+      <li>Made for the Steam Deck: controller navigation, Game Mode, and mods kept on the SD card with the game</li>
+      <li>Games from Steam, Heroic and Lutris, through Proton</li>
+      <li>Optional AI help with any service you choose; no account of its own, no tracking</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.zombeatz.zoms-nexus.desktop</launchable>
+  <url type="homepage">https://github.com/ZomBeatz/zoms-nexus</url>
+  <url type="bugtracker">https://github.com/ZomBeatz/zoms-nexus/issues</url>
+  <categories>
+    <category>Game</category>
+  </categories>
+  <recommends>
+    <control>gamepad</control>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <supports>
+    <control>touch</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <mediatype>x-scheme-handler/nxm</mediatype>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2026-11-23">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

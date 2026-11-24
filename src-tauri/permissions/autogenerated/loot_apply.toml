@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-loot-apply"
+description = "Enables the loot_apply command without any pre-configured scope."
+commands.allow = ["loot_apply"]
+
+[[permission]]
+identifier = "deny-loot-apply"
+description = "Denies the loot_apply command without any pre-configured scope."
+commands.deny = ["loot_apply"]

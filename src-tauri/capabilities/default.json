@@ -138,6 +138,13 @@
     "allow-ai-set",
     "allow-ai-context",
     "allow-ai-ask",
-    "allow-open-steam"
+    "allow-open-steam",
+    "allow-snapshot-list",
+    "allow-snapshot-take",
+    "allow-snapshot-restore",
+    "allow-snapshot-delete",
+    "allow-loot-sort",
+    "allow-loot-apply",
+    "allow-app-update"
   ]
 }

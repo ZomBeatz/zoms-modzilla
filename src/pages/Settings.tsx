@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, Copy, FileDown, FileUp, FolderOpen, ScrollText, ExternalLink, Eye, EyeOff, KeyRound, Link2, MonitorCheck } from "lucide-react";
 import { getDevice, readUi, saveUi } from "../deck";
 import { AddToSteam } from "./AddToSteam";
+import { showDeckSetup } from "../DeckSetup";
 import { AiSettings } from "./AiSettings";
 import { api, isDesktop, openUrl, pickFile, pickFolder, pickSave, type LinkStatus, type Settings, type SystemReport } from "../api";
 import type { Ctx } from "../App";
@@ -384,6 +385,9 @@ function DeckHelp({ toast }: { toast: (t: string) => void }) {
         <span className="muted small"> {dev?.gameMode ? "· running in Game Mode" : deck ? "· this is a Steam Deck" : "· how to use Zom's Nexus on one"}</span>
       </summary>
       {isDesktop && <AddToSteam toast={toast} />}
+      <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={showDeckSetup}>
+        Show the Steam Deck setup
+      </button>
       <ol className="deck-steps">
         <li>
           <b>Put it in Game Mode.</b> Add to Steam (above) puts it in your library with artwork. Or by hand: in Desktop Mode, Steam › Games › <i>Add a Non-Steam Game to My Library…</i>. In Game Mode it's under Library › Non-Steam, and opens full screen.
@@ -742,6 +746,19 @@ export function SettingsPage(ctx: Ctx) {
         <ThisComputer {...ctx} />
 
         {isDesktop && <Logs {...ctx} />}
+
+        {isDesktop && (
+          <div className="panel">
+            <h3>New versions</h3>
+            <label className="setting" style={{ cursor: "pointer" }}>
+              <input type="checkbox" checked={overview.settings.checkAppUpdates !== false} onChange={(e) => void save({ checkAppUpdates: e.target.checked })} />
+              <span className="what">
+                <b>Tell me when a newer Zom's Nexus is out</b>
+                <span>Asks GitHub once a day (only the app's name and version go with it). Installed from Flathub, Flathub updates it instead.</span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {isDesktop && <BackupPanel {...ctx} />}
 

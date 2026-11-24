@@ -61,7 +61,11 @@ Answer plainly and briefly, for a player rather than a programmer: name the mod 
 using the app's own buttons where they exist (Switch off, Update, Find the problem mod, Play without mods, Mod settings, Check again). \
 Say when you're not sure, and never invent mod names, versions or settings that aren't in the data. Linux and Proton specifics matter: \
 launch options such as WINEDLLOVERRIDES, GE-Proton, case-sensitive file names, Steam Cloud. \
-Never ask for passwords or API keys.";
+Never ask for passwords or API keys. \
+When the app can do what you suggest, end your answer with one block like this, listing only those actions, and only mods from the list above: \
+```actions\n[{\"do\": \"switchOff\", \"mod\": \"<mod name exactly as listed>\"}]\n``` \
+The actions are: switchOff and switchOn (a mod, by its name), findProblem (switch half the mods off at a time to find the one at fault), playWithoutMods, checkAgain (the app's conflict check), modSettings (its settings editor). \
+The person sees each as a button and decides; leave the block out when no action fits.";
 
 /// Models that take Claude's server-side refusal fallback.
 fn takes_fallback(model: &str) -> bool {
@@ -141,14 +145,57 @@ pub fn allowed_url(base: &str) -> bool {
 }
 
 /// Ask the AI. `context` is the text the person saw and approved.
-pub async fn ask(http: &reqwest::Client, s: &AiSettings, key: Option<&str>, context: &str, messages: &[Message]) -> Result<String, String> {
+/// One piece of a streamed answer.
+#[derive(Debug, PartialEq)]
+pub enum Piece {
+    Text(String),
+    Stop(String),
+    Failed(String),
+    Nothing,
+}
+
+/// A `data:` line of a streamed answer, read.
+pub fn piece(provider: &str, data: &str) -> Piece {
+    let data = data.trim();
+    if data == "[DONE]" {
+        return Piece::Stop("end".into());
+    }
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else { return Piece::Nothing };
+    if provider == "anthropic" {
+        match v["type"].as_str() {
+            Some("content_block_delta") if v["delta"]["type"] == "text_delta" => Piece::Text(v["delta"]["text"].as_str().unwrap_or("").to_string()),
+            Some("message_delta") => match v["delta"]["stop_reason"].as_str() {
+                Some(r) => Piece::Stop(r.to_string()),
+                None => Piece::Nothing,
+            },
+            Some("error") => Piece::Failed(crate::log::scrub(v["error"]["message"].as_str().unwrap_or("The AI service had a problem."))),
+            _ => Piece::Nothing,
+        }
+    } else {
+        if let Some(e) = v["error"]["message"].as_str() {
+            return Piece::Failed(crate::log::scrub(e));
+        }
+        let c = &v["choices"][0];
+        if let Some(t) = c["delta"]["content"].as_str().filter(|t| !t.is_empty()) {
+            return Piece::Text(t.to_string());
+        }
+        match c["finish_reason"].as_str() {
+            Some(r) => Piece::Stop(r.to_string()),
+            None => Piece::Nothing,
+        }
+    }
+}
+
+/// Ask the AI. `context` is the text the person saw and approved. The answer streams: each
+/// piece goes to `on_text` as it comes, and the whole answer is given back at the end.
+pub async fn ask(http: &reqwest::Client, s: &AiSettings, key: Option<&str>, context: &str, messages: &[Message], on_text: impl Fn(&str)) -> Result<String, String> {
     if messages.is_empty() || messages.last().is_some_and(|m| m.role != "user") {
         return Err("Write a question first.".into());
     }
     if s.model.trim().is_empty() {
         return Err("Pick a model in Settings › AI help.".into());
     }
-    let timeout = Duration::from_secs(300);
+    let timeout = Duration::from_secs(600);
     let res = if s.provider == "anthropic" {
         let key = key.ok_or("Add your Claude API key in Settings › AI help.")?;
         let mut req = http
@@ -160,7 +207,9 @@ pub async fn ask(http: &reqwest::Client, s: &AiSettings, key: Option<&str>, cont
         if takes_fallback(&s.model) {
             req = req.header("anthropic-beta", "server-side-fallback-2026-07-01");
         }
-        req.json(&anthropic_body(&s.model, context, messages)).send().await
+        let mut body = anthropic_body(&s.model, context, messages);
+        body["stream"] = serde_json::json!(true);
+        req.json(&body).send().await
     } else {
         let base = s.base_url.trim().trim_end_matches('/');
         if base.is_empty() {
@@ -173,16 +222,55 @@ pub async fn ask(http: &reqwest::Client, s: &AiSettings, key: Option<&str>, cont
         if let Some(k) = key {
             req = req.bearer_auth(k);
         }
-        req.json(&openai_body(&s.model, context, messages)).send().await
+        let mut body = openai_body(&s.model, context, messages);
+        body["stream"] = serde_json::json!(true);
+        req.json(&body).send().await
     }
     .map_err(|e| if e.is_timeout() { "The AI service took too long to answer.".to_string() } else if e.is_connect() { "Couldn't reach the AI service. For one on this computer, check it's running.".to_string() } else { "Couldn't reach the AI service.".to_string() })?;
     let status = res.status();
-    let body = res.text().await.map_err(|_| "The AI service's answer didn't arrive whole.".to_string())?;
-    if !status.is_success() {
-        return Err(explain(&s.provider, status, &body));
+    let streamed = res.headers().get("content-type").and_then(|v| v.to_str().ok()).is_some_and(|c| c.contains("event-stream"));
+    if !status.is_success() || !streamed {
+        // An error, or a service that answered in one piece anyway.
+        let body = res.text().await.map_err(|_| "The AI service's answer didn't arrive whole.".to_string())?;
+        if !status.is_success() {
+            return Err(explain(&s.provider, status, &body));
+        }
+        let v: serde_json::Value = serde_json::from_str(&body).map_err(|_| "The AI service's answer didn't read.".to_string())?;
+        let text = if s.provider == "anthropic" { anthropic_reply(&v) } else { openai_reply(&v) }?;
+        on_text(&text);
+        return Ok(text);
     }
-    let v: serde_json::Value = serde_json::from_str(&body).map_err(|_| "The AI service's answer didn't read.".to_string())?;
-    if s.provider == "anthropic" { anthropic_reply(&v) } else { openai_reply(&v) }
+    let mut res = res;
+    let mut buf = String::new();
+    let mut all = String::new();
+    let mut stop = String::new();
+    while let Some(chunk) = res.chunk().await.map_err(|_| "The AI service stopped answering partway.".to_string())? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(i) = buf.find('\n') {
+            let line: String = buf.drain(..=i).collect();
+            let Some(data) = line.trim_end().strip_prefix("data:") else { continue };
+            match piece(&s.provider, data) {
+                Piece::Text(t) => {
+                    all.push_str(&t);
+                    on_text(&t);
+                }
+                Piece::Stop(r) => stop = r,
+                Piece::Failed(e) => return Err(format!("The AI service had a problem partway: {e}")),
+                Piece::Nothing => {}
+            }
+        }
+        if all.len() > 400_000 {
+            break;
+        }
+    }
+    if stop == "refusal" {
+        return Err("The AI declined to answer that.".into());
+    }
+    let all = all.trim().to_string();
+    if all.is_empty() {
+        return Err("The AI sent back an empty answer.".into());
+    }
+    Ok(if matches!(stop.as_str(), "max_tokens" | "length") { format!("{all}\n\n(The answer was cut off.)") } else { all })
 }
 
 /// "2026-11-23 01:15" in this computer's time zone.
@@ -241,6 +329,17 @@ mod tests {
         assert!(allowed_url("https://api.openai.com/v1") && allowed_url("http://localhost:11434/v1") && !allowed_url("http://example.com/v1"));
         let s = scrub("key=abcdef&x by Alex", &["Alex".into()]);
         assert!(s.contains("key=…") && s.contains("<you>") && !s.contains("abcdef"));
+    }
+
+    #[test]
+    fn reads_streamed_answers() {
+        assert_eq!(piece("anthropic", r#"{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hi"}}"#), Piece::Text("Hi".into()));
+        assert_eq!(piece("anthropic", r#"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}"#), Piece::Nothing);
+        assert_eq!(piece("anthropic", r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#), Piece::Stop("end_turn".into()));
+        assert!(matches!(piece("anthropic", r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#), Piece::Failed(_)));
+        assert_eq!(piece("openai", r#"{"choices":[{"delta":{"content":"Yo"},"finish_reason":null}]}"#), Piece::Text("Yo".into()));
+        assert_eq!(piece("openai", "[DONE]"), Piece::Stop("end".into()));
+        assert_eq!(piece("openai", "not json"), Piece::Nothing);
     }
 
     #[test]

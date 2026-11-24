@@ -212,6 +212,12 @@ pub struct Report {
     /// Who puts each file in the game (for tracing the game's logs back to mods).
     #[serde(skip)]
     pub owners: crate::gamelogs::Owners,
+    /// Each plugin: its name, its mod, its file (for sorting and the kept plugin order).
+    #[serde(skip)]
+    pub plugin_files: Vec<(String, String, std::path::PathBuf)>,
+    /// The plugin order is one kept for the profile (sorted by LOOT), not the mod order.
+    #[serde(default)]
+    pub sorted_order: bool,
 }
 
 /// The masters a plugin names in its header (TES4 record, MAST sub-records).
@@ -286,6 +292,9 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
             }
         }
         for (rel, from) in entries {
+            if profile.game == crate::bg3::GAME && crate::bg3::not_for_game_folder(&rel.to_lowercase()) {
+                continue;
+            }
             code |= runs_code(&rel);
             if is_program(&rel) {
                 programs.push(rel.clone());
@@ -347,8 +356,42 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
             r.plugins.push(PluginIssue { plugin: name.clone(), mod_name: mod_name.clone(), master, kind: kind.into() });
         }
     }
-    r.load_order = plugins.into_iter().map(|(n, _, _)| n).collect();
+    r.load_order = plugins.iter().map(|(n, _, _)| n.clone()).collect();
+    r.plugin_files = plugins;
     r
+}
+
+/// Use the plugin order kept for the profile: the load order, and which masters load too late.
+pub fn use_order(r: &mut Report, kept: &[String]) {
+    if kept.is_empty() {
+        return;
+    }
+    crate::loot::apply_order(&mut r.load_order, kept);
+    r.sorted_order = true;
+    let pos = |n: &str| r.load_order.iter().position(|p| p.eq_ignore_ascii_case(n));
+    let mut late = vec![];
+    for (name, mod_name, src) in &r.plugin_files {
+        for m in masters(src) {
+            if let (Some(a), Some(b)) = (pos(&m), pos(name)) {
+                if a > b {
+                    late.push(PluginIssue { plugin: name.clone(), mod_name: mod_name.clone(), master: m, kind: "order".into() });
+                }
+            }
+        }
+    }
+    r.plugins.retain(|i| i.kind != "order");
+    r.plugins.extend(late);
+}
+
+/// Whether a plugin is flagged as a master (or is an .esm/.esl).
+pub fn is_master(path: &Path) -> bool {
+    let name = path.to_string_lossy().to_lowercase();
+    if name.ends_with(".esm") || name.ends_with(".esl") {
+        return true;
+    }
+    let mut head = [0u8; 12];
+    let n = fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
+    n >= 12 && &head[0..4] == b"TES4" && u32::from_le_bytes([head[8], head[9], head[10], head[11]]) & 1 == 1
 }
 
 /// Fill in `needs` and `compat` from what Nexus Mods says about the profile's mods.

@@ -47,6 +47,10 @@ export interface Settings {
   /** Games whose mods are copied in, never hard-linked. */
   copyGames?: string[];
   games: { domain: string; name: string; path?: string | null; modFolder?: string | null; launch?: string | null }[];
+  /** Snapshot a game's saves by itself before each Play. */
+  snapshotBeforePlay?: boolean;
+  /** Ask GitHub once a day whether a newer Zom's Nexus is out. */
+  checkAppUpdates?: boolean;
 }
 
 export interface User {
@@ -472,6 +476,8 @@ export interface CheckReport {
   loadersMissing?: { loader: string; mods: string[] }[];
   /** Mod loaders in the game or the profile. */
   loaders?: string[];
+  /** The plugin order is one kept for the profile (sorted by LOOT). */
+  sortedOrder?: boolean;
   /** Mods whose files sit inside an extra folder, so they land where the game won't look. */
   misplaced?: { modId: number; modName: string; extra: string; lands: string; should: string }[];
 }
@@ -510,6 +516,23 @@ export interface TsFound {
   categories: string[];
   updated: string;
   needs: number;
+}
+
+/** LOOT's sorted plugin order for a profile, and its notes. */
+export interface LootProposal {
+  now: string[];
+  sorted: { order: string[]; changed: boolean; notes: { plugin: string; kind: "say" | "warn" | "error"; text: string }[]; unknown: number };
+}
+
+/** A copy of a game's saves. */
+export interface Snapshot {
+  id: string;
+  at: number;
+  label: string;
+  owner: string;
+  files: number;
+  size: number;
+  auto: boolean;
 }
 
 /** A Mod Organizer 2 folder: its profiles and how many mods. */
@@ -671,10 +694,17 @@ export const api = {
   openLogFolder: () => call<void>("log_open"),
   deleteProfile: (id: string) => call<void>("profile_delete", { id }),
   checkProfile: (id: string) => call<CheckReport>("profile_check", { id }),
+  appUpdate: () => call<{ release?: { version: string; url: string; notes: string; appImage?: string | null } | null; flatpak: boolean; version: string }>("app_update"),
+  lootSort: (id: string) => call<LootProposal>("loot_sort", { id }),
+  lootApply: (id: string, order: string[] | null) => call<void>("loot_apply", { id, order }),
+  snapshots: (game: string) => call<Snapshot[]>("snapshot_list", { game }),
+  takeSnapshot: (game: string, label: string) => call<Snapshot>("snapshot_take", { game, label }),
+  restoreSnapshot: (game: string, id: string) => call<Snapshot>("snapshot_restore", { game, id }),
+  deleteSnapshot: (game: string, id: string) => call<void>("snapshot_delete", { game, id }),
   aiStatus: () => call<{ settings?: { provider: string; model: string; baseUrl?: string } | null; hasKey: boolean }>("ai_status"),
   aiSet: (settings: { provider: string; model: string; baseUrl: string } | null, key: string | null) => call<{ settings?: { provider: string; model: string; baseUrl?: string } | null; hasKey: boolean }>("ai_set", { settings, key }),
   aiContext: (profile: string | null, game: string | null) => call<string>("ai_context", { profile, game }),
-  aiAsk: (context: string, messages: { role: string; content: string }[]) => call<string>("ai_ask", { context, messages }),
+  aiAsk: (context: string, messages: { role: string; content: string }[], id: string) => call<string>("ai_ask", { context, messages, id }),
   openSteam: (what: "keyboard" | "tmodloader-workshop" | "games") => call<void>("open_steam", { what }),
   steamEntry: () => call<{ added: boolean; steamRunning: boolean; program?: string | null; appImage: boolean; dev: boolean; hasSteam: boolean }>("steam_entry"),
   steamAdd: (restart: boolean) => call<boolean>("steam_add", { restart }),

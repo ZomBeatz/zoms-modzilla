@@ -186,45 +186,38 @@ fn patterns(game: &Path) -> Vec<String> {
     out
 }
 
-/// Whether a process's command line or program is inside the game's folder.
+/// Whether a process's command line or program is inside the game's folder (for the tests,
+/// with a made-up /proc entry).
+#[cfg(test)]
 fn runs_from(pid_dir: &Path, game: &Path, pats: &[String]) -> bool {
     let cmd = fs::read(pid_dir.join("cmdline")).map(|b| String::from_utf8_lossy(&b).replace('\0', " ")).unwrap_or_default().replace('\\', "/").to_lowercase();
+    cmd_in(&cmd, pats) || fs::read_link(pid_dir.join("exe")).map(|p| p.starts_with(game)).unwrap_or(false)
+}
+
+/// Whether a command line is from inside the game's folder.
+fn cmd_in(cmd: &str, pats: &[String]) -> bool {
     // A folder name, not a longer one starting the same ("Game" vs "Game 2").
-    let inside = |p: &str| cmd.match_indices(p).any(|(i, _)| cmd[i + p.len()..].starts_with('/'));
-    if pats.iter().any(|p| inside(p)) {
-        return true;
-    }
-    fs::read_link(pid_dir.join("exe")).map(|p| p.starts_with(game)).unwrap_or(false)
+    pats.iter().any(|p| cmd.match_indices(p.as_str()).any(|(i, _)| cmd[i + p.len()..].starts_with('/')))
 }
 
 /// Is anything running from the game's folder?
 pub fn running(game: &Path) -> bool {
-    if game.to_string_lossy().len() < 5 {
-        return false;
-    }
-    let pats = patterns(game);
-    let me = std::process::id().to_string();
-    fs::read_dir("/proc")
-        .map(|rd| rd.flatten().filter(|e| e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()) && e.file_name().to_string_lossy() != me).any(|e| runs_from(&e.path(), game, &pats)))
-        .unwrap_or(false)
+    !processes(game).is_empty()
 }
 
-/// The processes running from the game's folder (never this app).
+/// The processes running from the game's folder (never this app). Outside a Flatpak, a
+/// program's own path counts too (for games started without their folder on the command line).
 pub fn processes(game: &Path) -> Vec<i32> {
     if game.to_string_lossy().len() < 5 {
         return vec![];
     }
     let pats = patterns(game);
-    let me = std::process::id().to_string();
-    fs::read_dir("/proc")
-        .map(|rd| {
-            rd.flatten()
-                .filter(|e| e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()) && e.file_name().to_string_lossy() != me)
-                .filter(|e| runs_from(&e.path(), game, &pats))
-                .filter_map(|e| e.file_name().to_string_lossy().parse().ok())
-                .collect()
-        })
-        .unwrap_or_default()
+    let flatpak = crate::host::in_flatpak();
+    crate::host::processes()
+        .into_iter()
+        .filter(|p| cmd_in(&p.cmd, &pats) || (!flatpak && fs::read_link(format!("/proc/{}/exe", p.pid)).map(|e| e.starts_with(game)).unwrap_or(false)))
+        .map(|p| p.pid)
+        .collect()
 }
 
 static CANCEL: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -247,16 +240,15 @@ pub fn stop(game: &str, path: &Path, end: bool) -> usize {
     }
     let pids = processes(path);
     for pid in &pids {
-        // SAFETY: kill only sends a signal to the given process number.
-        unsafe { libc::kill(*pid, libc::SIGTERM) };
+        crate::host::signal(*pid, false);
     }
     if !pids.is_empty() {
         let path = path.to_path_buf();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(8));
             for pid in processes(&path) {
-                // SAFETY: as above; only processes still running from the game's folder.
-                unsafe { libc::kill(pid, libc::SIGKILL) };
+                // Only processes still running from the game's folder.
+                crate::host::signal(pid, true);
             }
         });
     }

@@ -78,7 +78,6 @@ pub fn mod_tool(game: &str) -> Option<&'static str> {
     Some(match game {
         "masseffectlegendaryedition" => "Mass Effect Legendary Edition mods are installed with ME3Tweaks Mod Manager, not by copying files.",
         "terraria" => "Terraria mods are installed through tModLoader (a free Steam app), in its own Mods folder.",
-        "baldursgate3" => "Baldur's Gate 3 mods also need its in-game mod list or BG3 Mod Manager; Zom's Nexus puts the files in place.",
         _ => return None,
     })
 }
@@ -93,6 +92,9 @@ pub fn default_mod_folder(game: &str) -> Option<&'static str> {
         "finalfantasy7rebirth" => "End/Content/Paks/~mods",
         "clairobscurexpedition33" => "Sandfall/Content/Paks/~mods",
         "helldivers2" => "data",
+        // Baldur's Gate 3: Script Extender and loose files go in the game folder; its .pak mods
+        // go in its Mods folder in the prefix (bg3.rs).
+        "baldursgate3" => "",
         "cyberpunk2077" | "witcher3" | "valheim" | "eldenring" | "mountandblade2bannerlord" | "kingdomcomedeliverance" | "kingdomcomedeliverance2" | "nomanssky" | "subnautica" | "palworld" | "hogwartslegacy" | "monsterhunterworld" | "monsterhunterwilds" | "darksouls3" | "sekiro" | "bladeandsorcery" | "rimworld" | "xcom2" | "citiesskylines" | "stalker2heartofchornobyl" => "",
         _ => return None,
     })
@@ -449,7 +451,7 @@ fn set_plugins(file: &Path, old: &[String], new: &[String], star: bool) -> Resul
         .lines()
         .filter(|l| {
             let name = l.trim().trim_start_matches('*').to_lowercase();
-            !ours.contains(&name)
+            !name.is_empty() && !ours.contains(&name)
         })
         .map(String::from)
         .collect();
@@ -460,7 +462,8 @@ fn set_plugins(file: &Path, old: &[String], new: &[String], star: bool) -> Resul
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     // plugins.txt is read by a Windows game: CRLF line ends.
-    fs::write(file, lines.join("\r\n") + "\r\n").map_err(|e| e.to_string())
+    let body = if lines.is_empty() { String::new() } else { lines.join("\r\n") + "\r\n" };
+    fs::write(file, body).map_err(|e| e.to_string())
 }
 
 pub struct Target<'a> {
@@ -525,6 +528,10 @@ pub fn apply(data: &Path, t: &Target, profile: &Profile, mods: &[StoredMod]) -> 
         out.mods += 1;
         for (rel_s, from) in entries(unpacked, t.mod_folder) {
             let key = rel_s.to_lowercase();
+            // Baldur's Gate 3's .pak mods don't go in the game folder (bg3.rs puts them in place).
+            if t.game == crate::bg3::GAME && crate::bg3::not_for_game_folder(&key) {
+                continue;
+            }
             match at.get(&key) {
                 Some(&j) => {
                     out.clashes += 1;
@@ -614,15 +621,19 @@ pub fn apply(data: &Path, t: &Target, profile: &Profile, mods: &[StoredMod]) -> 
     // Bethesda plugins, in the profile's order.
     if let (Some((folder, star)), Some(prefix)) = (plugins_txt(t.game), t.prefix) {
         let data_dir = t.mod_folder.to_lowercase();
-        let plugins: Vec<String> = d
-            .files
+        // In the profile's mod order (not the order files went in: ones already in place come
+        // first there), then the kept plugin order (LOOT) on top.
+        let mut plugins: Vec<String> = want
             .iter()
+            .map(|(rel, _)| rel)
+            .filter(|f| placed.contains(&f.to_lowercase()))
             .filter_map(|f| {
                 let (dir, name) = f.rsplit_once('/')?;
                 let ext = name.rsplit('.').next()?.to_lowercase();
                 (dir.to_lowercase() == data_dir && matches!(ext.as_str(), "esp" | "esm" | "esl")).then(|| name.to_string())
             })
             .collect();
+        crate::loot::apply_order(&mut plugins, &crate::loot::saved(data, &profile.id));
         if !plugins.is_empty() {
             let file = prefix.join("drive_c/users/steamuser/AppData/Local").join(folder).join("plugins.txt");
             set_plugins(&file, &[], &plugins, star)?;
@@ -774,6 +785,26 @@ mod tests {
         clear(&data, "skyrimspecialedition", &game).unwrap();
         assert_eq!(fs::read_to_string(game.join("Data/textures/Rock.dds")).unwrap(), "game", "the game's own file is back");
         assert!(!game.join("Data/textures/new.dds").exists());
+    }
+
+    #[test]
+    fn plugin_order_follows_the_profile_not_the_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (data, lib, game, pfx) = (tmp.path().join("data"), tmp.path().join("lib"), tmp.path().join("game"), tmp.path().join("pfx"));
+        fs::create_dir_all(game.join("Data")).unwrap();
+        let plugins = pfx.join("drive_c/users/steamuser/AppData/Local/Skyrim Special Edition/plugins.txt");
+        let m1 = lib_mod(&lib, 1, &[("A.esp", "a")]);
+        let m2 = lib_mod(&lib, 2, &[("B.esp", "b")]);
+        let t = Target { game: "skyrimspecialedition", root: &game, mod_folder: "Data", prefix: Some(&pfx), copy: false };
+        let all = [m1, m2];
+        apply(&data, &t, &profile(&[2]), &all).unwrap();
+        // B is in place already; A goes in now, but A comes first in the profile.
+        apply(&data, &t, &profile(&[1, 2]), &all).unwrap();
+        assert_eq!(fs::read_to_string(&plugins).unwrap(), "*A.esp\r\n*B.esp\r\n");
+        // A kept plugin order (LOOT's) wins over the mod order.
+        crate::loot::save(&data, "p1", Some(&["B.esp".to_string(), "A.esp".to_string()])).unwrap();
+        apply(&data, &t, &profile(&[1, 2]), &all).unwrap();
+        assert_eq!(fs::read_to_string(&plugins).unwrap(), "*B.esp\r\n*A.esp\r\n");
     }
 
     #[test]

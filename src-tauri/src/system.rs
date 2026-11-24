@@ -105,7 +105,7 @@ pub struct Report {
 }
 
 pub fn check(tray: bool, links: bool, steam_libraries: usize, library: &Path) -> Report {
-    let os = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let os = crate::host::os_release();
     let fam = family(&os);
     let distro = os.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=")).map(|v| v.trim_matches('"').to_string()).unwrap_or_else(|| "Linux".into());
     let fix = |w: &str, ok: bool| if ok { None } else { install(fam, w) };

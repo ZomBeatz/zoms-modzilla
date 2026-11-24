@@ -62,17 +62,20 @@ On some NVIDIA setups the window can stay white. Zom's Nexus already turns off t
 | **A tidy library** | `~/Games/Nexus Mods/<game>/<mod id> - <name>/`, with a `nexus.json` for each mod. Zip, 7z and rar files are unpacked when they finish (you can turn that off). |
 | **Your games** | Cover art for each one. Finds Nexus Mods games in every Steam library folder (native and Proton, Flatpak and Snap), and the Games page lists the folders it searched. Add others by hand, with their mod folder and start command. |
 | **Mod installers** | Mods with an installer (FOMOD) show each step with its pictures; your choices are kept for the next version, and a collection's curator choices are used by themselves. |
-| **Thunderstore too** | For the 280+ BepInEx games on Thunderstore (Valheim, Lethal Company, R.E.P.O. …): search, get a mod with everything it needs, update all, and keep profiles made from mod packs up to date. No Overwolf. |
+| **Thunderstore too** | For 340+ games on Thunderstore (BepInEx, MelonLoader, Shimloader and more: Valheim, Lethal Company, R.E.P.O., Palworld …): search, get a mod with everything it needs, update all, and keep profiles made from mod packs up to date. No Overwolf. |
 | **Bring your setup across** | Make a profile from a Mod Organizer 2 profile (nothing downloaded again, installer choices kept) or from an r2modman profile or profile code (its config files too). |
 | **Each profile's own settings** | Mods' settings files (.ini, .cfg, .json …) are kept per profile, with an editor that turns them into switches and boxes. |
 | **When a game won't start** | Notices a game that closes right after starting and shows what changed since it last ran fine; reads mod loaders' logs (SMAPI, script extenders, BepInEx, MelonLoader, UE4SS, REFramework, Cyber Engine Tweaks, RED4ext) and names the mod at fault; warns before Play when the same crash is coming; finds loaders a profile needs but doesn't have, mods packed a folder too deep, and the Proton launch options mod loaders need. **Play without mods** and **Find the problem mod** narrow it down. |
-| **Ask AI (optional)** | Bring any AI service (Claude, OpenAI, Gemini, OpenRouter, or one on your own computer like Ollama): it gets the check, the logs and the last runs, with your home folder and names taken out, and only when you press Send. |
-| **Steam Deck** | **Add to Steam** puts it in your library with artwork, so Game Mode opens it full screen; the controller moves between buttons (A, B, Y, L1/R1), text boxes open Steam's keyboard, and mods on an SD card stay on the card. |
+| **Ask AI (optional)** | Bring any AI service (Claude, OpenAI, Gemini, OpenRouter, or one on your own computer like Ollama): it gets the check, the logs and the last runs, with your home folder and names taken out, and only when you press Send. Answers stream in, and its suggestions (switch off a mod, find the problem mod) are buttons you choose to press. |
+| **Steam Deck** | A first-run setup on the Deck; **Add to Steam** puts it in your library with artwork, so Game Mode opens it full screen; the controller moves between buttons (A, B, Y, L1/R1), text boxes open Steam's keyboard, and mods on an SD card stay on the card. |
 | **More launchers** | Games from Heroic (GOG, Epic, Amazon) and Lutris as well as Steam; shows which Proton each runs with. Terraria's tModLoader mods and mod packs too. |
+| **LOOT sorting** | Bethesda games' plugins sorted by LOOT's community masterlist, with its notes (incompatibilities, missing requirements, plugins that need cleaning). Kept per profile, apart from the mod order. |
+| **Baldur's Gate 3** | .pak mods go in the game's Mods folder and on its mod list (modsettings.lsx), in the profile's order; Script Extender and loose files go in the game folder. |
+| **Save snapshots** | A copy of a game's saves before trying risky mods (or by itself before each Play), put back in a click; nothing is ever deleted. |
 | **Saves per profile** | A heavily modded profile can keep its own saves; Zom's Nexus asks before the first Play and warns when Steam Cloud would copy saves back in. |
 | **Privacy** | No account of its own and no tracking. Your API key stays on your computer in a file only you can read. |
 
-Not done yet: Baldur's Gate 3's own mod list isn't managed, and Thunderstore games with loaders other than BepInEx can be browsed but not installed. Collection files hosted outside Nexus Mods have to be fetched by hand.
+Not done yet: a few Thunderstore games whose mods go in as whole zips (Godot games) or into the Proton prefix (Balatro) can be browsed but not installed. Collection files hosted outside Nexus Mods have to be fetched by hand.
 
 ## Building it
 
@@ -86,6 +89,8 @@ npm test          # the page's tests
 cargo test --manifest-path src-tauri/Cargo.toml   # the queue, library and link tests
 npm run bundle    # .deb, .rpm and .AppImage in src-tauri/target/release/bundle
 ```
+
+Flathub: `packaging/flatpak/` has the manifest, desktop file and metainfo, and how to make the offline dependency lists Flathub needs. Other installs tell you when a new version is out (Settings › New versions).
 
 ## Where things are kept
 

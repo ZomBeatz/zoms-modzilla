@@ -60,7 +60,9 @@ pub fn list(data: &Path, game: &str) -> Vec<Snapshot> {
         .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
         .filter_map(|e| serde_json::from_slice(&fs::read(e.path()).ok()?).ok())
         .collect();
-    out.sort_by(|a, b| b.at.cmp(&a.at));
+    // Newest first; ones taken in the same second by their number ("<time>-2" came after "<time>").
+    let order = |s: &Snapshot| (s.at, s.id.rsplit_once('-').and_then(|(_, n)| n.parse::<u32>().ok()).unwrap_or(1));
+    out.sort_by_key(|s| std::cmp::Reverse(order(s)));
     out
 }
 

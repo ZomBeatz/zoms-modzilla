@@ -1210,9 +1210,10 @@ mod tests {
         assert_eq!(again.list()[0].status, Status::Paused);
 
         // One waiting to try again when the app closed goes back in line (its timer is gone).
-        let file = dir.path().join("queue.json");
-        std::fs::write(&file, std::fs::read_to_string(&file).unwrap().replace("\"paused\"", "\"waiting\"")).unwrap();
-        let third = Queue::new(None, dir.path().to_path_buf(), settings, Nexus::new(None));
+        // In a folder of its own: the first queue above is still running and may save over it.
+        let other = tempfile::tempdir().unwrap();
+        std::fs::write(other.path().join("queue.json"), saved.replace("\"paused\"", "\"waiting\"")).unwrap();
+        let third = Queue::new(None, other.path().to_path_buf(), settings, Nexus::new(None));
         assert_eq!(third.list()[0].status, Status::Queued);
     }
 

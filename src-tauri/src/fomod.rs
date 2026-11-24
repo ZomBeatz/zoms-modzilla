@@ -20,7 +20,7 @@ use std::{
 };
 
 /// Marks a built folder, so placing it never skips a wrapping folder the way a raw mod does.
-pub const MARK: &str = ".zoms-nexus-installed";
+pub const MARK: &str = ".zoms-modzilla-installed";
 /// Installers bigger than this aren't read (they're a few kilobytes as a rule).
 const MAX_XML: u64 = 4 * 1024 * 1024;
 
@@ -427,7 +427,7 @@ pub fn install(inst: &Installer, choices: &[Choice], mod_dir: &Path, base_name: 
                 fs::copy(from, &to).map_err(|e| format!("Couldn't copy {dest_rel}: {e}"))?;
             }
         }
-        fs::write(tmp.join(MARK), b"Built by Zom's Nexus from the mod's installer choices.\n").map_err(|e| e.to_string())
+        fs::write(tmp.join(MARK), b"Built by Zom's Modzilla from the mod's installer choices.\n").map_err(|e| e.to_string())
     };
     if let Err(e) = build() {
         let _ = fs::remove_dir_all(&tmp);

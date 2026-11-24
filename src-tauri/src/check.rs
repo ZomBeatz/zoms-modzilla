@@ -334,7 +334,7 @@ pub fn check(profile: &Profile, mods: &[StoredMod], mod_folder: &str, game_root:
         .collect();
     r.conflicts.sort_by(|a, b| b.files.cmp(&a.files).then(a.winner.cmp(&b.winner)));
 
-    // Masters: the game's own plugins (not ones Zom's Nexus put there) count as present.
+    // Masters: the game's own plugins (not ones Zom's Modzilla put there) count as present.
     let in_game = |name: &str| {
         game_root
             .map(|root| {

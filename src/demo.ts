@@ -307,7 +307,7 @@ function tick() {
     if (active >= slots) break;
     if (j.status === "queued" && !demoPremium && !j.hasLink) {
       // A free account needs the website's click for each file.
-      Object.assign(j, { status: "needsLink", error: "Nexus Mods only lets Premium members download straight from an app. Click Mod manager download on the file's page and Zom's Nexus picks it up from there." });
+      Object.assign(j, { status: "needsLink", error: "Nexus Mods only lets Premium members download straight from an app. Click Mod manager download on the file's page and Zom's Modzilla picks it up from there." });
       emit("queue:job", { ...j });
       continue;
     }
@@ -751,7 +751,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
         items: [
           { what: "Library folder", ok: true, detail: "Mods are kept in /home/alex/Games/Nexus Mods." },
           { what: "Steam", ok: true, detail: "2 Steam library folders searched for games." },
-          { what: "Nexus Mods links", ok: linksOurs, detail: linksOurs ? "The website's Mod manager download button opens Zom's Nexus." : "Not set up yet: Settings > Nexus Mods links > Open them with Zom's Nexus." },
+          { what: "Nexus Mods links", ok: linksOurs, detail: linksOurs ? "The website's Mod manager download button opens Zom's Modzilla." : "Not set up yet: Settings > Nexus Mods links > Open them with Zom's Modzilla." },
           { what: "Tray icon", ok: true, detail: "Closing the window while downloading keeps it going in the tray." },
           { what: "Notifications", ok: true, detail: "Tells you when downloads finish in the background." },
           { what: "Rar files", ok: false, detail: "Mods packed as .rar can't be unpacked until bsdtar or unrar is installed (zip and 7z always can).", fix: "sudo apt install libarchive-tools" },
@@ -881,11 +881,11 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     }
     case "profile_share_code": {
       const p = profiles.find((x) => x.id === a.id)!;
-      return `ZN1-${btoa(JSON.stringify({ game: p.game, name: p.name, mods: p.mods })).replace(/=+$/, "")}`;
+      return `ZM1-${btoa(JSON.stringify({ game: p.game, name: p.name, mods: p.mods })).replace(/=+$/, "")}`;
     }
     case "profile_import_code": {
       const code = String(a.code).replace(/\s/g, "");
-      if (!code.startsWith("ZN1-")) throw new Error("That isn't a Zom's Nexus share code (they start with ZN1-).");
+      if (!code.startsWith("ZM1-")) throw new Error("That isn't a Zom's Modzilla share code (they start with ZM1-).");
       const d = JSON.parse(atob(code.slice(4))) as Profile;
       const p: Profile = { id: `p${Date.now()}`, name: `${d.name} (shared)`, game: d.game, mods: d.mods };
       profiles = [...profiles, p];
@@ -897,7 +897,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
         { version: "1.2.0", notes: ["First version with an installer."] },
       ];
     case "game_stop":
-      emit("game:state", { game: a.game, state: "stopped", since: now(), detail: "Stopped from Zom's Nexus" });
+      emit("game:state", { game: a.game, state: "stopped", since: now(), detail: "Stopped from Zom's Modzilla" });
       return 0;
     case "app_backup":
     case "app_restore":
@@ -1008,7 +1008,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       return { settings: demoAi, hasKey: !!demoAi };
     case "ai_context": {
       const p = profiles.find((x) => x.id === a.profile);
-      return `App: Zom's Nexus (demo)\n\n## Profile: ${p?.name ?? "?"}\nMods in load order:\n${(p?.mods ?? []).map((m, i) => `${i + 1}. Mod ${m.modId}${m.enabled ? "" : " (switched off)"}`).join("\n")}\n\n## Last runs\n- closed 9 s after starting, twice\n\n## SKSE's log: 2 problem lines\nplugin QuietFootsteps.dll (00000001 QuietFootsteps 00000001) disabled, incompatible with current runtime version`;
+      return `App: Zom's Modzilla (demo)\n\n## Profile: ${p?.name ?? "?"}\nMods in load order:\n${(p?.mods ?? []).map((m, i) => `${i + 1}. Mod ${m.modId}${m.enabled ? "" : " (switched off)"}`).join("\n")}\n\n## Last runs\n- closed 9 s after starting, twice\n\n## SKSE's log: 2 problem lines\nplugin QuietFootsteps.dll (00000001 QuietFootsteps 00000001) disabled, incompatible with current runtime version`;
     }
     case "ai_ask":
       await new Promise((r) => setTimeout(r, 700));
@@ -1088,7 +1088,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     case "remote_stop":
       return null;
     case "steam_entry":
-      return { added: demoSteamAdded, steamRunning: true, program: "/home/alex/Applications/Zoms-Nexus.AppImage", appImage: true, dev: false, hasSteam: true };
+      return { added: demoSteamAdded, steamRunning: true, program: "/home/alex/Applications/Zoms-Modzilla.AppImage", appImage: true, dev: false, hasSteam: true };
     case "steam_add":
       if (!a.restart) throw new Error("steamRunning");
       demoSteamAdded = true;

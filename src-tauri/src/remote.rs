@@ -118,12 +118,12 @@ fn reply(s: &mut TcpStream, status: &str, kind: &str, body: &str) {
 pub fn page(token: &str, said: &str) -> String {
     let said = said.replace('&', "&amp;").replace('<', "&lt;");
     format!(
-        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Send to Zom's Nexus</title>
+        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Send to Zom's Modzilla</title>
 <style>body{{font:16px system-ui,sans-serif;background:#0d0d12;color:#ececf1;margin:0;padding:20px;max-width:560px}}h1{{font-size:20px}}p{{color:#a7a7b5}}label{{display:block;margin:18px 0 6px;font-weight:600}}textarea,input{{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #33333f;background:#17171f;color:inherit;font:inherit}}button{{margin-top:10px;padding:12px 18px;border:0;border-radius:10px;background:#7c5cff;color:#fff;font:inherit;font-weight:600}}.said{{padding:12px;border-radius:10px;background:#1d2a1f;color:#b9f5c4}}a{{color:#b6a6ff}}</style></head><body>
-<h1>Send to Zom's Nexus</h1>{said_block}
+<h1>Send to Zom's Modzilla</h1>{said_block}
 <form method="post" action="/link?t={token}"><label for="l">A link</label><p>A <b>Mod manager download</b> link (long-press the button on nexusmods.com, copy the link), a mod page, or a collection.</p><textarea id="l" name="link" rows="3" placeholder="nxm://… or https://www.nexusmods.com/…"></textarea><button>Send</button></form>
 <form method="post" action="/key?t={token}"><label for="k">Your API key</label><p>Copy it from <a href="https://next.nexusmods.com/settings/api-keys" rel="noreferrer">nexusmods.com › Settings › API keys</a>.</p><input id="k" name="key" type="password" autocomplete="off"><button>Sign in</button></form>
-<p>This page works only while Send from your phone is open in Zom's Nexus. Use it on your home network.</p></body></html>"#,
+<p>This page works only while Send from your phone is open in Zom's Modzilla. Use it on your home network.</p></body></html>"#,
         said_block = if said.is_empty() { String::new() } else { format!(r#"<p class="said">{said}</p>"#) }
     )
 }
@@ -151,7 +151,7 @@ pub fn start(got: impl Fn(Sent) -> String + Send + 'static) -> Result<String, St
             let (route, query) = path.split_once('?').unwrap_or((path.as_str(), ""));
             let t = form_value(query, "t").unwrap_or_default();
             if !same(&t, &tok) {
-                reply(&mut s, "403 Forbidden", "text/plain", "This page's code doesn't match. Scan the QR code in Zom's Nexus again.");
+                reply(&mut s, "403 Forbidden", "text/plain", "This page's code doesn't match. Scan the QR code in Zom's Modzilla again.");
                 continue;
             }
             let said = match (method.as_str(), route) {
@@ -226,7 +226,7 @@ mod tests {
             let _ = s.read_to_string(&mut out);
             out
         };
-        assert!(ask(format!("GET /{q} HTTP/1.1\r\nHost: x\r\n\r\n")).contains("Send to Zom's Nexus"));
+        assert!(ask(format!("GET /{q} HTTP/1.1\r\nHost: x\r\n\r\n")).contains("Send to Zom's Modzilla"));
         assert!(ask("GET /?t=wrong HTTP/1.1\r\n\r\n".into()).starts_with("HTTP/1.1 403"));
         let body = "link=nxm%3A%2F%2Fstardewvalley%2Fmods%2F1%2Ffiles%2F2";
         let r = ask(format!("POST /link{} HTTP/1.1\r\nContent-Length: {}\r\n\r\n{body}", &q[0..].trim_start_matches(|c| c != '?'), body.len()));

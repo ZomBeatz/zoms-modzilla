@@ -72,7 +72,7 @@ pub fn look(picked: &Path) -> Result<Found, String> {
     Ok(Found { folder: dir.to_string_lossy().into_owned(), profiles, mods, game_name })
 }
 
-/// A profile's mods, lowest priority first (MO2 lists the winner first; Zom's Nexus last), with
+/// A profile's mods, lowest priority first (MO2 lists the winner first; Zom's Modzilla last), with
 /// whether each is switched on. Separators and MO2's "unmanaged" entries (DLC) are left out.
 pub fn modlist(text: &str) -> Vec<(String, bool)> {
     let mut out: Vec<(String, bool)> = text

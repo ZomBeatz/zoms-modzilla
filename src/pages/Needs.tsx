@@ -100,7 +100,7 @@ export function NeedsDialog({ facts, library, jobs, onClose, toast }: { facts: M
           <div key={d} className="pick-item" style={{ cursor: "default" }}>
             <div className="grow">
               <b>{d}</b> <span className="pill">Expansion</span>
-              <div className="meta">An expansion for the game. Zom's Nexus can't check whether you own it.</div>
+              <div className="meta">An expansion for the game. Zom's Modzilla can't check whether you own it.</div>
             </div>
           </div>
         ))}

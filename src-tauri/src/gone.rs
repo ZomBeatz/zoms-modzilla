@@ -1,4 +1,4 @@
-//! Games that were uninstalled: Zom's Nexus remembers where each game it has seen lives, and when
+//! Games that were uninstalled: Zom's Modzilla remembers where each game it has seen lives, and when
 //! a game's folder is gone while the folder that held it is still there (so not an unplugged
 //! drive), it offers to delete that game's mods from the library. Kept in `known-games.json` in
 //! the data folder.

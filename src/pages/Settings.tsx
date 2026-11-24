@@ -15,7 +15,7 @@ type Theme = "system" | "light" | "dark";
 
 function readTheme(): Theme {
   try {
-    const t = localStorage.getItem("zoms-nexus:theme");
+    const t = localStorage.getItem("zoms-modzilla:theme");
     return t === "light" || t === "dark" ? t : "system";
   } catch {
     return "system";
@@ -24,8 +24,8 @@ function readTheme(): Theme {
 
 function setTheme(t: Theme) {
   try {
-    if (t === "system") localStorage.removeItem("zoms-nexus:theme");
-    else localStorage.setItem("zoms-nexus:theme", t);
+    if (t === "system") localStorage.removeItem("zoms-modzilla:theme");
+    else localStorage.setItem("zoms-modzilla:theme", t);
   } catch {
     /* no storage */
   }
@@ -67,7 +67,7 @@ function ApiKey({ overview, setOverview, toast }: Ctx) {
       <h3>
         <KeyRound size={15} /> Nexus Mods account
       </h3>
-      <p className="lead">Zom's Nexus uses your personal API key to ask Nexus Mods about mods and to download them. The key stays on this computer, in a file only you can read.</p>
+      <p className="lead">Zom's Modzilla uses your personal API key to ask Nexus Mods about mods and to download them. The key stays on this computer, in a file only you can read.</p>
       {overview.hasKey && (
         <div className="account">
           {user ? (
@@ -136,7 +136,7 @@ function ApiKey({ overview, setOverview, toast }: Ctx) {
         {error && <span className="err">{error}</span>}
       </label>
       {isDesktop && (
-        <label className="check" style={{ marginTop: 12 }} title="Through secret-tool. The keyring may ask to be unlocked when Zom's Nexus starts.">
+        <label className="check" style={{ marginTop: 12 }} title="Through secret-tool. The keyring may ask to be unlocked when Zom's Modzilla starts.">
           <input
             type="checkbox"
             checked={!!overview.settings.keyInKeyring}
@@ -172,7 +172,7 @@ function ThisComputer({ toast }: Ctx) {
         <span className="grow" />
         <span className="muted small">{r.distro}</span>
       </h3>
-      <p className="lead">{missing ? "Zom's Nexus works without these, but they make it better. Copy the command into a terminal, then check again." : "Everything Zom's Nexus can use is here."}</p>
+      <p className="lead">{missing ? "Zom's Modzilla works without these, but they make it better. Copy the command into a terminal, then check again." : "Everything Zom's Modzilla can use is here."}</p>
       <div className="sys-list">
         {r.items.map((i) => (
           <div key={i.what} className="sys-item">
@@ -211,7 +211,7 @@ function ThisComputer({ toast }: Ctx) {
             className="btn sm"
             title="Versions, this computer, settings, games, profiles and downloads. Never your API key."
             onClick={async () => {
-              const path = await pickSave("Save a report for getting help", "zoms-nexus-report.json");
+              const path = await pickSave("Save a report for getting help", "zoms-modzilla-report.json");
               if (path)
                 await api.diagnostics(path).then(
                   () => toast("Saved. Share it when asking for help; it doesn't contain your API key."),
@@ -236,7 +236,7 @@ function Logs({ toast }: Ctx) {
       <h3>
         <ScrollText size={15} /> Logs
       </h3>
-      <p className="lead">What Zom's Nexus did and what went wrong, for troubleshooting. Keys and private links are blanked out.</p>
+      <p className="lead">What Zom's Modzilla did and what went wrong, for troubleshooting. Keys and private links are blanked out.</p>
       <div className="row gap-sm wrap">
         <button className="btn sm" onClick={() => void load()}>
           {text === null ? "Show the log" : "Refresh"}
@@ -265,11 +265,11 @@ function Links({ toast }: Ctx) {
       <h3>
         <Link2 size={15} /> Nexus Mods links
       </h3>
-      <p className="lead">The <b>Mod manager download</b> button on nexusmods.com opens an nxm:// link. When Zom's Nexus opens those links, that button adds the file to your downloads, even when the app is closed.</p>
+      <p className="lead">The <b>Mod manager download</b> button on nexusmods.com opens an nxm:// link. When Zom's Modzilla opens those links, that button adds the file to your downloads, even when the app is closed.</p>
       <div className="row gap wrap">
         {status?.ours ? (
           <span className="pill ok">
-            <Check size={12} /> Zom's Nexus opens Nexus Mods links
+            <Check size={12} /> Zom's Modzilla opens Nexus Mods links
           </span>
         ) : status?.other ? (
           <span className="pill warn">Another program opens them now ({status.other})</span>
@@ -283,17 +283,17 @@ function Links({ toast }: Ctx) {
               api.registerLinks().then(
                 (s) => {
                   setStatus(s);
-                  toast("Zom's Nexus now opens Nexus Mods links");
+                  toast("Zom's Modzilla now opens Nexus Mods links");
                 },
                 (e) => toast((e as Error).message),
               )
             }
           >
-            Open them with Zom's Nexus
+            Open them with Zom's Modzilla
           </button>
         )}
       </div>
-      <p className="form-note">If your browser asks which program to use for the link the first time, pick Zom's Nexus and tick “Always”.</p>
+      <p className="form-note">If your browser asks which program to use for the link the first time, pick Zom's Modzilla and tick “Always”.</p>
     </div>
   );
 }
@@ -385,7 +385,7 @@ function DeckHelp({ toast }: { toast: (t: string) => void }) {
     <details className="panel deck-help" open={deck || undefined}>
       <summary>
         <h3 style={{ display: "inline-flex", margin: 0 }}>Steam Deck</h3>
-        <span className="muted small"> {dev?.gameMode ? "· running in Game Mode" : deck ? "· this is a Steam Deck" : "· how to use Zom's Nexus on one"}</span>
+        <span className="muted small"> {dev?.gameMode ? "· running in Game Mode" : deck ? "· this is a Steam Deck" : "· how to use Zom's Modzilla on one"}</span>
       </summary>
       {isDesktop && <AddToSteam toast={toast} />}
       <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={showDeckSetup}>
@@ -396,7 +396,7 @@ function DeckHelp({ toast }: { toast: (t: string) => void }) {
           <b>Put it in Game Mode.</b> Add to Steam (above) puts it in your library with artwork. Or by hand: in Desktop Mode, Steam › Games › <i>Add a Non-Steam Game to My Library…</i>. In Game Mode it's under Library › Non-Steam, and opens full screen.
         </li>
         <li>
-          <b>The controls.</b> Steam Deck mode (above, under Appearance) turns on by itself: the D-pad moves, A selects, B goes back, Y plays, L1/R1 change page, the triggers scroll, ☰ finds anything. If the controller does nothing, pick the <i>Gamepad</i> layout for Zom's Nexus in Steam's controller settings.
+          <b>The controls.</b> Steam Deck mode (above, under Appearance) turns on by itself: the D-pad moves, A selects, B goes back, Y plays, L1/R1 change page, the triggers scroll, ☰ finds anything. If the controller does nothing, pick the <i>Gamepad</i> layout for Zom's Modzilla in Steam's controller settings.
         </li>
         <li>
           <b>Typing.</b> Choosing a text box opens Steam's keyboard; <kbd>STEAM</kbd> + <kbd>X</kbd> opens it any time.
@@ -416,7 +416,7 @@ function DeckHelp({ toast }: { toast: (t: string) => void }) {
           <b>Installing and updating.</b> SteamOS keeps its system read-only, so use the AppImage (keep it in ~/Applications, and right-click › Properties › Permissions › Is executable), never the .deb or .rpm. Your library, profiles and settings live in your home folder, so they survive SteamOS updates.
         </li>
         <li>
-          <b>When a modded game won't start.</b> Many mod loaders need GE-Proton: add it with ProtonUp-Qt (in Discover), then pick it in the game's Properties › Compatibility. Zom's Nexus says so when a game keeps closing right after it starts.
+          <b>When a modded game won't start.</b> Many mod loaders need GE-Proton: add it with ProtonUp-Qt (in Discover), then pick it in the game's Properties › Compatibility. Zom's Modzilla says so when a game keeps closing right after it starts.
         </li>
       </ol>
     </details>
@@ -526,14 +526,14 @@ function BackupPanel(ctx: Ctx) {
     <div className="panel">
       <h3>Backup</h3>
       <p className="lead">
-        Everything Zom's Nexus knows, in one file: profiles (with their rules, add-ons and notes), your notes and tags on mods, restore points, time played, settings and collections' installer choices. Not the mods themselves, the API key, or the download list. Keep one before reinstalling, or take it to another computer.
+        Everything Zom's Modzilla knows, in one file: profiles (with their rules, add-ons and notes), your notes and tags on mods, restore points, time played, settings and collections' installer choices. Not the mods themselves, the API key, or the download list. Keep one before reinstalling, or take it to another computer.
       </p>
       <div className="row gap wrap">
         <button
           className="btn"
           onClick={async () => {
             const d = new Date();
-            const path = await pickSave("Save a backup", `Zom's Nexus backup ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`);
+            const path = await pickSave("Save a backup", `Zom's Modzilla backup ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`);
             if (path) await api.backup(path).then((n) => toast(`Saved a backup (${n} files)`), (e) => toast((e as Error).message));
           }}
         >
@@ -542,7 +542,7 @@ function BackupPanel(ctx: Ctx) {
         <button
           className="btn"
           onClick={async () => {
-            const path = await pickFile("Open a Zom's Nexus backup");
+            const path = await pickFile("Open a Zom's Modzilla backup");
             if (path) setConfirm(path);
           }}
         >
@@ -656,7 +656,7 @@ export function SettingsPage(ctx: Ctx) {
           <div className="setting">
             <span className="what">
               <b>While a game is running</b>
-              <span>Downloads share your connection with the game. Hold waits to start new ones; Pause stops all of them until the game closes. Only games started from Zom's Nexus are noticed.</span>
+              <span>Downloads share your connection with the game. Hold waits to start new ones; Pause stops all of them until the game closes. Only games started from Zom's Modzilla are noticed.</span>
             </span>
             <select value={s.whilePlaying ?? "carry"} onChange={(e) => save({ whilePlaying: e.target.value as Settings["whilePlaying"] })} aria-label="While a game is running">
               <option value="carry">Carry on</option>
@@ -712,7 +712,7 @@ export function SettingsPage(ctx: Ctx) {
               <span className="mono">{s.libraryDir}</span>
               <span>Each mod gets its own folder here, under its game: “skyrimspecialedition/266 - Mod name”.</span>
               <DiskBar free={ctx.overview.freeSpace} total={ctx.overview.totalSpace} label="this drive" />
-              <span>Zom's Nexus checks there's room before each download and unpack, and checks the game's drive before copying mods into it.</span>
+              <span>Zom's Modzilla checks there's room before each download and unpack, and checks the game's drive before copying mods into it.</span>
             </span>
             {isDesktop && (
               <button
@@ -771,7 +771,7 @@ export function SettingsPage(ctx: Ctx) {
             <label className="setting" style={{ cursor: "pointer" }}>
               <input type="checkbox" checked={overview.settings.checkAppUpdates !== false} onChange={(e) => void save({ checkAppUpdates: e.target.checked })} />
               <span className="what">
-                <b>Tell me when a newer Zom's Nexus is out</b>
+                <b>Tell me when a newer Zom's Modzilla is out</b>
                 <span>Asks GitHub once a day (only the app's name and version go with it). Installed from Flathub, Flathub updates it instead.</span>
               </span>
             </label>
@@ -788,13 +788,13 @@ export function SettingsPage(ctx: Ctx) {
 
         <div className="panel">
           <h3>Getting started</h3>
-          <p className="lead">The first-run checklist: connect your account, let the website's buttons open Zom's Nexus, find your games, get your first mod.</p>
+          <p className="lead">The first-run checklist: connect your account, let the website's buttons open Zom's Modzilla, find your games, get your first mod.</p>
           <button
             className="btn"
             onClick={() => {
               try {
-                localStorage.setItem("zoms-nexus:setup-show", "1");
-                localStorage.removeItem("zoms-nexus:setup-hidden");
+                localStorage.setItem("zoms-modzilla:setup-show", "1");
+                localStorage.removeItem("zoms-modzilla:setup-hidden");
               } catch {
                 /* no storage */
               }
@@ -810,14 +810,14 @@ export function SettingsPage(ctx: Ctx) {
           <div className="panel">
             <h3>When the app closes</h3>
             <p className="muted small" style={{ marginTop: 0 }}>
-              Closing the window while files download keeps them going: Zom's Nexus stays in the system tray, and closes itself with a notification when they're done. Downloads that stop partway (a crash, a restart) carry on from where they were the next time it opens.
+              Closing the window while files download keeps them going: Zom's Modzilla stays in the system tray, and closes itself with a notification when they're done. Downloads that stop partway (a crash, a restart) carry on from where they were the next time it opens.
             </p>
             {toggle("Start with my computer", "Opens in the background when you sign in, to finish any unfinished downloads. If there's nothing to download, it closes again straight away.", "startWithComputer")}
-            {toggle("Open in the tray", "When you start Zom's Nexus, it waits in the system tray instead of opening its window. Open it from the tray icon. Needs a tray.", "startHidden")}
+            {toggle("Open in the tray", "When you start Zom's Modzilla, it waits in the system tray instead of opening its window. Open it from the tray icon. Needs a tray.", "startHidden")}
             <div className="setting">
               <span className="what">
                 <b>Unfinished downloads at start</b>
-                <span>Carry on with them when Zom's Nexus opens, or keep them paused until you resume them.</span>
+                <span>Carry on with them when Zom's Modzilla opens, or keep them paused until you resume them.</span>
               </span>
               <select value={s.resumeOnStart ?? "yes"} onChange={(e) => save({ resumeOnStart: e.target.value as "yes" | "no" })} aria-label="Unfinished downloads at start">
                 <option value="yes">Carry on</option>
@@ -880,13 +880,13 @@ export function SettingsPage(ctx: Ctx) {
         <div className="panel">
           <h3>About</h3>
           <p style={{ margin: 0 }}>
-            Zom's Nexus {overview.version} by ZomBeatz Media. MIT license. Not made by or connected with Nexus Mods.
+            Zom's Modzilla {overview.version} by ZomBeatz Media. MIT license. Not made by or connected with Nexus Mods.
           </p>
           <div className="row gap" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={() => openUrl("https://docs.zombeatzmedia.com/nexus/")}>
+            <button className="btn" onClick={() => openUrl("https://docs.zombeatzmedia.com/modzilla/")}>
               Read the guide
             </button>
-            <button className="btn" onClick={() => openUrl("https://github.com/ZomBeatz/Zoms-Nexus/issues/new")}>
+            <button className="btn" onClick={() => openUrl("https://github.com/ZomBeatz/Zoms-Modzilla/issues/new")}>
               Send feedback
             </button>
           </div>

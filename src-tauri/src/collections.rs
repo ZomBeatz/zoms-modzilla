@@ -77,7 +77,7 @@ pub struct Collection {
     pub download_link: Option<String>,
 }
 
-const QUERY: &str = "query ZomsNexusCollection($slug: String!, $revision: Int, $adult: Boolean) {
+const QUERY: &str = "query ZomsModzillaCollection($slug: String!, $revision: Int, $adult: Boolean) {
   collectionRevision(slug: $slug, revision: $revision, viewAdultContent: $adult) {
     revisionNumber
     downloadLink

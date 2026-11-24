@@ -1,7 +1,7 @@
-"""Zom's Nexus in the Steam Deck's quick access menu.
+"""Zom's Modzilla in the Steam Deck's quick access menu.
 
-Reads Zom's Nexus' profiles and which one is in each game (never writes them), and asks the app
-to switch: `zoms-nexus --profile <id>` or `--no-mods <game>`. A running app takes the request;
+Reads Zom's Modzilla's profiles and which one is in each game (never writes them), and asks the app
+to switch: `zoms-modzilla --profile <id>` or `--no-mods <game>`. A running app takes the request;
 otherwise it starts and does it.
 """
 
@@ -11,7 +11,7 @@ import subprocess
 
 import decky
 
-APP = "com.zombeatz.zoms-nexus"
+APP = "com.zombeatz.zoms-modzilla"
 
 
 def _home():
@@ -65,17 +65,17 @@ class Plugin:
         elif launch.get("exe") and os.path.exists(launch["exe"]):
             cmd = [launch["exe"]] + args
         else:
-            return "Open Zom's Nexus once on this Deck first."
+            return "Open Zom's Modzilla once on this Deck first."
         env = dict(os.environ, HOME=_home(), DISPLAY=os.environ.get("DISPLAY", ":0"))
         env.setdefault("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
         try:
             subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         except OSError as e:
-            return "Couldn't start Zom's Nexus: %s" % e
+            return "Couldn't start Zom's Modzilla: %s" % e
         return ""
 
     async def _main(self):
-        decky.logger.info("Zom's Nexus plugin ready")
+        decky.logger.info("Zom's Modzilla plugin ready")
 
     async def _unload(self):
         pass

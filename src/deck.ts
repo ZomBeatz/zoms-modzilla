@@ -4,7 +4,7 @@
 import { api, isDesktop } from "./api";
 
 export type UiMode = "auto" | "deck" | "desktop";
-const KEY = "zoms-nexus:ui";
+const KEY = "zoms-modzilla:ui";
 
 export function readUi(): { mode: UiMode; scale: number } {
   try {

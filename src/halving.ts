@@ -14,7 +14,7 @@ export interface Halving {
   round: number;
 }
 
-const KEY = "zoms-nexus:halving";
+const KEY = "zoms-modzilla:halving";
 function all(): Record<string, Halving> {
   try {
     return JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Halving>;

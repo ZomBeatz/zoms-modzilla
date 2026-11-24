@@ -15,7 +15,7 @@ const BATCH: usize = 40;
 /// How long an answer is kept, in seconds.
 const KEEP: u64 = 24 * 3600;
 
-const QUERY: &str = "query ZomsNexusRequirements($ids: [CompositeDomainWithIdInput!]!, $count: Int) {
+const QUERY: &str = "query ZomsModzillaRequirements($ids: [CompositeDomainWithIdInput!]!, $count: Int) {
   legacyModsByDomain(ids: $ids, count: $count) {
     nodes {
       modId name status updatedAt adult category

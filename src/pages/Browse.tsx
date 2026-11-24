@@ -103,7 +103,7 @@ export function Browse({ game: picked, games, overview, setOverview, openAdd, go
               Thunderstore
             </button>
           </div>
-          {onTs && !ts.supported && <span className="warn-text small">{ts.name} uses {ts.loader} on Thunderstore, which Zom's Nexus can't put in yet: you can look, not get.</span>}
+          {onTs && !ts.supported && <span className="warn-text small">{ts.name} uses {ts.loader} on Thunderstore, which Zom's Modzilla can't put in yet: you can look, not get.</span>}
         </div>
       )}
       {onTs && game ? (

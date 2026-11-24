@@ -107,7 +107,7 @@ export function AddDialog({ overview, toast, go, onClose, initial }: Ctx & { onC
           </button>
         }
       >
-        <p style={{ margin: 0 }}>Zom's Nexus needs your Nexus Mods API key before it can download anything. Add it in Settings.</p>
+        <p style={{ margin: 0 }}>Zom's Modzilla needs your Nexus Mods API key before it can download anything. Add it in Settings.</p>
       </Dialog>
     );
   }
@@ -250,7 +250,7 @@ export function AddDialog({ overview, toast, go, onClose, initial }: Ctx & { onC
             <div className="notice" style={{ marginTop: 16, marginBottom: 0 }}>
               <Info size={16} />
               <div>
-                <b>With a free Nexus Mods account,</b> start downloads from the website: open the file's page, click <b>Mod manager download</b>, and Zom's Nexus adds it here by itself. Nexus Mods only lets Premium
+                <b>With a free Nexus Mods account,</b> start downloads from the website: open the file's page, click <b>Mod manager download</b>, and Zom's Modzilla adds it here by itself. Nexus Mods only lets Premium
                 members download straight from an app. Set this up under <b>Settings &gt; Nexus Mods links</b>.
               </div>
             </div>

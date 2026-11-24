@@ -3,7 +3,7 @@
 //! Putting mods in ("applying" a profile):
 //! - Each mod's unpacked files are hard-linked into the game's mod folder (copied when the
 //!   library is on another drive), in the profile's order; a later mod wins a clash.
-//! - A game file that's in the way is moved to `<game>/.zoms-nexus-backup/` first and put back
+//! - A game file that's in the way is moved to `<game>/.zoms-modzilla-backup/` first and put back
 //!   when the mods are taken out again.
 //! - Everything placed is listed in `deployed/<game>.json` in the app's data folder, so taking
 //!   the mods out removes exactly those files and nothing of the game's own.
@@ -21,7 +21,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const BACKUP: &str = ".zoms-nexus-backup";
+pub const BACKUP: &str = ".zoms-modzilla-backup";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -288,7 +288,7 @@ pub fn entries(unpacked: &Path, mod_folder: &str) -> Vec<(String, PathBuf)> {
 }
 
 /// Marks a built folder whose files go into the game's own folder, not its mod folder.
-pub const GAME_ROOT_MARK: &str = ".zoms-nexus-game-folder";
+pub const GAME_ROOT_MARK: &str = ".zoms-modzilla-game-folder";
 
 /// Folders holding a SMAPI mod (a manifest.json with a UniqueID), the top-most ones, up to four
 /// folders down. Empty for anything else.
@@ -342,7 +342,7 @@ pub fn smapi_build(unpacked: &Path, mod_dir: &Path, base_name: &str, windows: bo
                     fs::copy(&launcher, tmp.join("Stardew Valley.exe")).map_err(|e| e.to_string())?;
                 }
             }
-            fs::write(tmp.join(crate::fomod::MARK), b"SMAPI, unpacked from its installer by Zom's Nexus.\n").map_err(|e| e.to_string())?;
+            fs::write(tmp.join(crate::fomod::MARK), b"SMAPI, unpacked from its installer by Zom's Modzilla.\n").map_err(|e| e.to_string())?;
             fs::write(tmp.join(GAME_ROOT_MARK), b"These files go into the game's own folder.\n").map_err(|e| e.to_string())
         });
         if let Err(e) = res {
@@ -412,7 +412,7 @@ fn clear_keeping(data: &Path, game: &str, root: &Path, keep: &HashMap<String, Pa
         let _ = fs::remove_file(p);
     }
     let still: HashSet<String> = left.files.iter().map(|f| f.to_lowercase()).collect();
-    let backup = root.join(BACKUP);
+    let backup = crate::legacy::backup_dir(root);
     for rel in &d.backups {
         if still.contains(&rel.to_lowercase()) {
             left.backups.push(rel.clone());
@@ -552,7 +552,7 @@ pub fn apply(data: &Path, t: &Target, profile: &Profile, mods: &[StoredMod]) -> 
     let mut d = Deployed { profile_id: Some(profile.id.clone()), profile_name: Some(profile.name.clone()), files: left.files, backups: left.backups, ..Default::default() };
     let mut placed: HashSet<String> = d.files.iter().map(|f| f.to_lowercase()).collect();
     let mut made_dirs: BTreeSet<String> = left.dirs.into_iter().collect();
-    let backup = t.root.join(BACKUP);
+    let backup = crate::legacy::backup_dir(t.root);
     out.backed_up = d.backups.len();
     let put = |rel_s: &str, from: &Path, d: &mut Deployed, made_dirs: &mut BTreeSet<String>, placed: &mut HashSet<String>, out: &mut Applied| -> Result<(), String> {
         // Windows doesn't mind "Textures" and "textures"; Linux does. Use the spelling already there.
@@ -882,7 +882,7 @@ mod tests {
         assert_eq!(fs::read_to_string(folder.join("Stardew Valley.exe")).unwrap(), "smapi", "stands in for the game's launcher");
         let e: Vec<String> = entries(&folder, "Mods").into_iter().map(|(r, _)| r).collect();
         assert!(e.contains(&"StardewModdingAPI.exe".to_string()) && e.contains(&"Mods/ConsoleCommands/manifest.json".to_string()) && e.contains(&"smapi-internal/a.dll".to_string()));
-        assert!(!e.iter().any(|x| x.contains(".zoms-nexus")));
+        assert!(!e.iter().any(|x| x.contains(".zoms-modzilla")));
         assert!(smapi_build(&one, &modd, "x", true).is_none(), "not SMAPI");
     }
 }

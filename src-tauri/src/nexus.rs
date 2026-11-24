@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 const API: &str = "https://api.nexusmods.com/v1";
-pub const APP_NAME: &str = "Zom's Nexus";
+pub const APP_NAME: &str = "Zom's Modzilla";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -185,7 +185,7 @@ pub struct Nexus {
 }
 
 pub fn user_agent() -> String {
-    format!("ZomsNexus/{APP_VERSION} (Linux; +https://docs.zombeatzmedia.com/nexus/)")
+    format!("ZomsModzilla/{APP_VERSION} (Linux; +https://docs.zombeatzmedia.com/modzilla/)")
 }
 
 impl Nexus {

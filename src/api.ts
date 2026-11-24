@@ -51,7 +51,7 @@ export interface Settings {
   snapshotBeforePlay?: boolean;
   batteryFloor?: number;
   unpackOnPower?: boolean;
-  /** Ask GitHub once a day whether a newer Zom's Nexus is out. */
+  /** Ask GitHub once a day whether a newer Zom's Modzilla is out. */
   checkAppUpdates?: boolean;
 }
 
@@ -75,7 +75,7 @@ export interface Overview {
   totalSpace?: number | null;
 }
 
-/** What this computer has for Zom's Nexus (Settings > This computer). */
+/** What this computer has for Zom's Modzilla (Settings > This computer). */
 export interface SystemReport {
   distro: string;
   items: { what: string; ok: boolean; detail: string; fix?: string | null }[];
@@ -492,7 +492,7 @@ export interface TmlState {
   missing: string[];
 }
 
-/** A game on Thunderstore; `supported` when Zom's Nexus can put its mods in (BepInEx). */
+/** A game on Thunderstore; `supported` when Zom's Modzilla can put its mods in (BepInEx). */
 export interface TsGame {
   community: string;
   name: string;
@@ -883,7 +883,7 @@ export async function pickFile(title: string, kind: "pack" | "mod" | "exe" = "pa
 
 export const modUrl = (game: string, modId: number) => `https://www.nexusmods.com/${game}/mods/${modId}`;
 /** A file's mod-manager download page: its Slow download (or Premium's Fast download) button
- * hands the file to Zom's Nexus through an nxm link. Without nmm=1 it's the manual download,
+ * hands the file to Zom's Modzilla through an nxm link. Without nmm=1 it's the manual download,
  * which only saves the file in the browser. */
 export const fileUrl = (game: string, modId: number, fileId: number) => `${modUrl(game, modId)}?tab=files&file_id=${fileId}&nmm=1`;
 

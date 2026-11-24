@@ -1,4 +1,4 @@
-// The first time Zom's Nexus opens on a Steam Deck: everything that makes it feel at home there,
+// The first time Zom's Modzilla opens on a Steam Deck: everything that makes it feel at home there,
 // in one place. Shown once (Settings › Steam Deck can show it again).
 
 import { PhoneSendButton } from "./PhoneSend";
@@ -10,7 +10,7 @@ import { AddToSteam } from "./pages/AddToSteam";
 import { sameDriveFolder } from "./pages/Games";
 import { Dialog } from "./ui";
 
-const DONE = "zoms-nexus:deck-setup";
+const DONE = "zoms-modzilla:deck-setup";
 
 export const showDeckSetup = () => window.dispatchEvent(new Event("zoms:deck-setup"));
 
@@ -73,7 +73,7 @@ export function DeckSetup({ games, hasKey, toast, goSettings, reloadGames }: { g
         <li>
           <b>The controller.</b> {moved ? <span className="ok-text"><Check size={14} /> It works.</span> : <>Press the D-pad now: the highlight should move.</>}
           <div className="muted small">
-            <Gamepad2 size={13} /> A selects, B goes back, X opens a row's menu, Y plays, L1/R1 change page, the triggers scroll, ☰ finds anything. If nothing moves in Game Mode, set Zom's Nexus's controller layout in Steam to <i>Gamepad</i>.
+            <Gamepad2 size={13} /> A selects, B goes back, X opens a row's menu, Y plays, L1/R1 change page, the triggers scroll, ☰ finds anything. If nothing moves in Game Mode, set Zom's Modzilla's controller layout in Steam to <i>Gamepad</i>.
           </div>
         </li>
         <li>

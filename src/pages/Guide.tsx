@@ -11,7 +11,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
       <>
         <ol>
           <li>
-            In Desktop Mode, open Zom's Nexus once and press <b>Add to Steam</b> (Settings › Steam Deck). From then on it's in your library in Game Mode, with its artwork.
+            In Desktop Mode, open Zom's Modzilla once and press <b>Add to Steam</b> (Settings › Steam Deck). From then on it's in your library in Game Mode, with its artwork.
           </li>
           <li>Sign in: <b>Sign in with your phone</b> scans a QR code, so you paste your API key on your phone instead of typing it.</li>
           <li>Pick a game, get mods (Browse, or a collection), and make a profile. <b>Play</b> puts the profile's mods in and starts the game.</li>
@@ -32,7 +32,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
           The D-pad or left stick moves between buttons, <b>A</b> presses, <b>B</b> goes back, <b>LB/RB</b> change page, <b>Y</b> plays, <b>X</b> opens a thing's menu, and <b>Menu</b> finds anything.
         </p>
         <p>
-          In Game Mode, press the controller button on Zom's Nexus' page in your library and pick the <b>Gamepad with Mouse Trackpad</b> layout: the right trackpad then works as a mouse. The back buttons can be set to keys there (Edit layout › Back grips). Zom's Nexus listens for these:
+          In Game Mode, press the controller button on Zom's Modzilla's page in your library and pick the <b>Gamepad with Mouse Trackpad</b> layout: the right trackpad then works as a mouse. The back buttons can be set to keys there (Edit layout › Back grips). Zom's Modzilla listens for these:
         </p>
         <ul>
           <li>
@@ -59,7 +59,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
     title: "My mods don't show up in the game",
     body: (go) => (
       <ul>
-        <li>Press <b>Play</b> in Zom's Nexus (or Put mods in game on the profile) before starting from Steam: that's when mods go in.</li>
+        <li>Press <b>Play</b> in Zom's Modzilla (or Put mods in game on the profile) before starting from Steam: that's when mods go in.</li>
         <li>
           Run <b>Check for conflicts</b> on the profile: it finds mods packed a folder too deep, missing requirements and plugins, and loaders that need a Steam launch option under Proton.
         </li>
@@ -100,7 +100,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
     title: "xEdit, BodySlide, Nemesis, Pandora and DynDOLOD",
     body: () => (
       <p>
-        Add them under <b>Modding tools</b> in the game's Game tools and press Run: they start in the game's prefix and see the mods of the profile that's in. When a tool makes new files (Nemesis' behaviours, DynDOLOD's output), Zom's Nexus offers to keep them as a mod of your own, so they go in and out with the profile.
+        Add them under <b>Modding tools</b> in the game's Game tools and press Run: they start in the game's prefix and see the mods of the profile that's in. When a tool makes new files (Nemesis' behaviours, DynDOLOD's output), Zom's Modzilla offers to keep them as a mod of your own, so they go in and out with the profile.
       </p>
     ),
   },
@@ -141,7 +141,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
     title: "Profiles from the quick access menu (Decky Loader)",
     body: () => (
       <p>
-        With Decky Loader, the Zom's Nexus plugin lists your profiles in the <b>…</b> menu: switch a game's profile or take its mods out without leaving Game Mode. It's in the app's source under <code>packaging/decky</code>.
+        With Decky Loader, the Zom's Modzilla plugin lists your profiles in the <b>…</b> menu: switch a game's profile or take its mods out without leaving Game Mode. It's in the app's source under <code>packaging/decky</code>.
       </p>
     ),
   },

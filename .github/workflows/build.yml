@@ -54,14 +54,14 @@ jobs:
         with:
           args: "--bundles deb,rpm,appimage"
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: "Zom's Nexus ${{ github.ref_name }}"
+          releaseName: "Zom's Modzilla ${{ github.ref_name }}"
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
 
       - uses: actions/upload-artifact@v6
         with:
-          name: zoms-nexus-linux
+          name: zoms-modzilla-linux
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb

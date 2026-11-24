@@ -1,8 +1,8 @@
 //! Each profile keeps its own mod settings. Settings files (.cfg, .ini, .json …) go into the game
 //! as copies, never links, so a mod writing to one never changes the library's copy. When the
 //! mods come out again, the settings you changed, and the ones mods made on their first run
-//! inside folders Zom's Nexus made, move to `<data>/profile-settings/<profile>/` and go back in
-//! the next time that profile does. Nothing outside the folders Zom's Nexus made, or the files it
+//! inside folders Zom's Modzilla made, move to `<data>/profile-settings/<profile>/` and go back in
+//! the next time that profile does. Nothing outside the folders Zom's Modzilla made, or the files it
 //! placed, is ever touched.
 
 use crate::deploy::Deployed;
@@ -44,7 +44,7 @@ pub fn stamp(p: &Path) -> Option<(u64, u64)> {
 }
 
 /// Before the mods come out: keep the profile's changed settings, and take settings files mods
-/// made inside folders Zom's Nexus made. Returns how many were kept.
+/// made inside folders Zom's Modzilla made. Returns how many were kept.
 pub fn capture(data: &Path, d: &Deployed, root: &Path) -> usize {
     let Some(profile) = d.profile_id.as_deref() else { return 0 };
     let to = store(data, profile);

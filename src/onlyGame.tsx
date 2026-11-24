@@ -4,7 +4,7 @@
 import { useState } from "react";
 
 export function useOnlyGame(page: string): [boolean, (on: boolean) => void] {
-  const key = `zoms-nexus:only-game:${page}`;
+  const key = `zoms-modzilla:only-game:${page}`;
   const [only, setOnly] = useState(() => {
     try {
       return localStorage.getItem(key) === "1";

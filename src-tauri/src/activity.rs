@@ -226,14 +226,14 @@ fn cancelled(game: &str) -> bool {
     CANCEL.lock().unwrap().iter().any(|g| g == game)
 }
 
-/// Stop waiting for a game (Zom's Nexus stops watching it), and with `end`, close the processes
+/// Stop waiting for a game (Zom's Modzilla stops watching it), and with `end`, close the processes
 /// running from its folder: asked to close first, made to after 8 seconds. Gives how many
 /// processes were asked to close.
 pub fn stop(game: &str, path: &Path, end: bool) -> usize {
     if WATCHING.lock().unwrap().iter().any(|g| g == game) {
         CANCEL.lock().unwrap().push(game.to_string());
     } else {
-        set_state(game, "stopped", None, Some("Stopped from Zom's Nexus".into()));
+        set_state(game, "stopped", None, Some("Stopped from Zom's Modzilla".into()));
     }
     if !end {
         return 0;
@@ -252,7 +252,7 @@ pub fn stop(game: &str, path: &Path, end: bool) -> usize {
             }
         });
     }
-    crate::log::info(&format!("Stopped {game} from Zom's Nexus ({} processes asked to close)", pids.len()));
+    crate::log::info(&format!("Stopped {game} from Zom's Modzilla ({} processes asked to close)", pids.len()));
     pids.len()
 }
 
@@ -354,7 +354,7 @@ pub fn watch(data: PathBuf, profile_id: String, profile_name: String, game: Stri
             }
             crate::log::info(&format!("{game} ran for {secs} s ({profile_name})"));
         } else if cancelled(&game) {
-            set_state(&game, "stopped", named.as_deref(), Some("Stopped from Zom's Nexus".into()));
+            set_state(&game, "stopped", named.as_deref(), Some("Stopped from Zom's Modzilla".into()));
         } else {
             crate::log::warn(&format!("{game} didn't show up as running within three minutes of Play"));
             set_state(&game, "notStarted", named.as_deref(), None);

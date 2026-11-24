@@ -105,7 +105,7 @@ export function CollectionCard({ profile, onChanged, toast }: { profile: Profile
       {layers && !base && (
         <div className="collection-note">
           <p className="small" style={{ margin: 0 }}>
-            This profile was made before Zom's Nexus kept collections apart from your changes. Look up {revision != null ? `revision ${revision}` : "the collection"} once to sort out what's yours, so you can update the collection later and keep your changes, or share them as an add-on pack.
+            This profile was made before Zom's Modzilla kept collections apart from your changes. Look up {revision != null ? `revision ${revision}` : "the collection"} once to sort out what's yours, so you can update the collection later and keep your changes, or share them as an add-on pack.
           </p>
           <button
             className="btn primary sm"

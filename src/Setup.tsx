@@ -6,9 +6,9 @@ import { CheckCircle2, Circle, X } from "lucide-react";
 import { api, type LinkStatus } from "./api";
 import type { Ctx } from "./App";
 
-const HIDDEN = "zoms-nexus:setup-hidden";
+const HIDDEN = "zoms-modzilla:setup-hidden";
 /** Settings > Show Getting started sets this, to show it even when every step is done. */
-export const SHOW = "zoms-nexus:setup-show";
+export const SHOW = "zoms-modzilla:setup-show";
 
 export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersion }: Ctx) {
   const [hidden, setHidden] = useState(() => {
@@ -43,7 +43,7 @@ export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersio
     },
     {
       done: !!links?.ours,
-      title: "Let the website's download buttons open Zom's Nexus",
+      title: "Let the website's download buttons open Zom's Modzilla",
       text: "Then Mod manager download (and Vortex) buttons on nexusmods.com send files here.",
       action: (
         <button
@@ -52,7 +52,7 @@ export function Setup({ overview, games, jobs, go, openAdd, toast, libraryVersio
             api.registerLinks().then(
               (s) => {
                 setLinks(s);
-                toast("Nexus Mods links now open in Zom's Nexus");
+                toast("Nexus Mods links now open in Zom's Modzilla");
               },
               (e) => toast((e as Error).message),
             )

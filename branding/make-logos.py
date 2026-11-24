@@ -1,4 +1,4 @@
-"""Build the Zom's Nexus wordmarks and social preview (text outlined from Open Sans, like the Zomello logo).
+"""Build the Zom's Modzilla wordmarks and social preview (text outlined from Open Sans, like the Zomello logo).
 
 Run from the repo root: python3 branding/make-logos.py
 Needs fontTools and rsvg-convert (librsvg) for the PNGs.
@@ -13,7 +13,7 @@ FONTS = "/usr/share/fonts/TTF/"
 OUT = "branding"
 
 # The icon, without its <svg> wrapper, from the one source of truth.
-ICON = re.search(r"<svg[^>]*>(.*)</svg>", open(f"{OUT}/nexus-icon.svg").read(), re.S).group(1)
+ICON = re.search(r"<svg[^>]*>(.*)</svg>", open(f"{OUT}/modzilla-icon.svg").read(), re.S).group(1)
 
 
 def text_path(text, font_file, size, x, baseline, tracking=0.0):
@@ -32,7 +32,7 @@ def text_path(text, font_file, size, x, baseline, tracking=0.0):
 def logo(dark):
     ink, blue, sub = ("#ffffff", "#4fb0ec", "#9aa3b5") if dark else ("#14171f", "#2580c3", "#5b6375")
     zom, x1 = text_path("Zom's", "OpenSans-ExtraBold.ttf", 170, 345, 205)
-    product, x2 = text_path("Nexus", "OpenSans-ExtraBold.ttf", 170, x1 + 44, 205)
+    product, x2 = text_path("Modzilla", "OpenSans-ExtraBold.ttf", 170, x1 + 44, 205)
     tag, x3 = text_path("MOD MANAGER FOR LINUX", "OpenSans-Bold.ttf", 34, 349, 262, tracking=0.16)
     w = round(max(x2, x3) + 35)
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} 300" width="{w}" height="300">
@@ -64,7 +64,7 @@ def social():
 '''
 
 
-for name, svg in (("nexus-logo", logo(False)[0]), ("nexus-logo-dark", logo(True)[0]), ("social-preview", social())):
+for name, svg in (("modzilla-logo", logo(False)[0]), ("modzilla-logo-dark", logo(True)[0]), ("social-preview", social())):
     open(f"{OUT}/{name}.svg", "w").write(svg)
     width = "1280" if name == "social-preview" else "920"
     subprocess.run(["rsvg-convert", "-w", width, f"{OUT}/{name}.svg", "-o", f"{OUT}/{name}.png"], check=True)

@@ -1,7 +1,7 @@
 {
-  "name": "zoms-nexus-decky",
+  "name": "zoms-modzilla-decky",
   "version": "0.0.1",
-  "description": "Zom's Nexus profiles in the Steam Deck's quick access menu",
+  "description": "Zom's Modzilla profiles in the Steam Deck's quick access menu",
   "type": "module",
   "scripts": {
     "build": "rollup -c",

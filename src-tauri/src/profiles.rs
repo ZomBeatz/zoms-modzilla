@@ -8,7 +8,7 @@ use crate::deploy::{Profile, ProfileMod};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-pub const PACK_FORMAT: &str = "zoms-nexus-pack";
+pub const PACK_FORMAT: &str = "zoms-modzilla-pack";
 
 pub fn load(dir: &Path) -> Vec<Profile> {
     fs::read_to_string(dir.join("profiles.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
@@ -135,12 +135,12 @@ pub fn to_pack(p: &Profile, names: impl Fn(u64, u64) -> (String, String)) -> Pac
 }
 
 pub fn read_pack(text: &str) -> Result<Pack, String> {
-    let p: Pack = serde_json::from_str(text).map_err(|_| "That file isn't a Zom's Nexus mod pack.".to_string())?;
-    if p.format != PACK_FORMAT {
-        return Err("That file isn't a Zom's Nexus mod pack.".into());
+    let p: Pack = serde_json::from_str(text).map_err(|_| "That file isn't a Zom's Modzilla mod pack.".to_string())?;
+    if p.format != PACK_FORMAT && p.format != crate::legacy::OLD_PACK {
+        return Err("That file isn't a Zom's Modzilla mod pack.".into());
     }
     if p.version > 2 {
-        return Err("That mod pack was made by a newer Zom's Nexus. Update the app to open it.".into());
+        return Err("That mod pack was made by a newer Zom's Modzilla. Update the app to open it.".into());
     }
     if p.game.is_empty() || !p.game.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return Err("The mod pack doesn't name a game Nexus Mods uses.".into());
@@ -149,7 +149,7 @@ pub fn read_pack(text: &str) -> Result<Pack, String> {
         return Err("That add-on pack doesn't say which collection it goes on.".into());
     }
     if p.mods.len() + p.off.len() + p.files.len() > 5000 {
-        return Err("That mod pack lists more mods than Zom's Nexus takes at once (5,000).".into());
+        return Err("That mod pack lists more mods than Zom's Modzilla takes at once (5,000).".into());
     }
     Ok(p)
 }

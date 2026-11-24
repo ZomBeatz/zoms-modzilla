@@ -140,14 +140,14 @@ export function StatusPill({ status }: { status: Status }) {
   return <span className={`pill ${kind}`}>{word}</span>;
 }
 
-/** The wordmark: icon, then Zom's in the text color and Nexus in the accent. */
+/** The wordmark: icon, then Zom's in the text color and Modzilla in the accent. */
 export function Wordmark() {
   return (
     <div className="brand">
       <img src={`${import.meta.env.BASE_URL}app-icon.svg`} width={36} height={36} alt="" />
       <div className="brand-text">
         <div className="brand-name">
-          <span>Zom's</span> Nexus
+          <span>Zom's</span> Modzilla
         </div>
         <div className="brand-tag">MOD MANAGER</div>
       </div>

@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=Zom's Nexus
+Name=Zom's Modzilla
 GenericName=Mod Manager
 Comment=Mod manager for Linux and the Steam Deck: Nexus Mods and Thunderstore
-Exec=zoms-nexus %u
-Icon=com.zombeatz.zoms-nexus
+Exec=zoms-modzilla %u
+Icon=com.zombeatz.zoms-modzilla
 Terminal=false
 Categories=Game;
 Keywords=mods;modding;nexus;thunderstore;steam;deck;skyrim;cyberpunk;stardew;
 MimeType=x-scheme-handler/nxm;
-StartupWMClass=zoms-nexus
+StartupWMClass=zoms-modzilla

@@ -1,7 +1,7 @@
 //! Save snapshots: a copy of a game's saves (the ones in its save folder now) packed into a zip
 //! in `<data>/save-snapshots/<game>/`, before trying risky mods or by themselves before each
 //! Play. Restoring one first snapshots the saves there now, then moves them aside beside the
-//! other saves (`.zoms-nexus-saves/replaced <time>`), never deleting them, and unpacks the
+//! other saves (`.zoms-modzilla-saves/replaced <time>`), never deleting them, and unpacks the
 //! snapshot in their place.
 
 use serde::{Deserialize, Serialize};
@@ -135,7 +135,7 @@ pub fn restore(data: &Path, game: &str, live: &Path, owner: &str, id: &str) -> R
     if !walk(live).is_empty() {
         take(data, game, live, owner, &format!("Before restoring “{}”", snap.label), true)?;
         let parent = live.parent().ok_or("The save folder has no parent folder.")?;
-        let aside = parent.join(".zoms-nexus-saves").join(format!("replaced {}", crate::queue::now()));
+        let aside = parent.join(".zoms-modzilla-saves").join(format!("replaced {}", crate::queue::now()));
         fs::create_dir_all(aside.parent().unwrap()).map_err(|e| e.to_string())?;
         fs::rename(live, &aside).map_err(|e| format!("Couldn't move the saves there now aside: {e}"))?;
     }
@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(fs::read_to_string(live.join("slot1/save.sav")).unwrap(), "before mods");
         assert!(!live.join("new.sav").exists());
         // What was there is kept aside, and snapshotted.
-        let aside: Vec<_> = fs::read_dir(t.path().join("game/.zoms-nexus-saves")).unwrap().flatten().collect();
+        let aside: Vec<_> = fs::read_dir(t.path().join("game/.zoms-modzilla-saves")).unwrap().flatten().collect();
         assert_eq!(aside.len(), 1);
         assert_eq!(fs::read_to_string(aside[0].path().join("slot1/save.sav")).unwrap(), "broken by mods");
         let all = list(&data, "g");

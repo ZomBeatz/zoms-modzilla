@@ -1,5 +1,5 @@
 //! Games from Heroic (GOG, Epic, Amazon) and Lutris, next to Steam's: found by name among the
-//! games Zom's Nexus knows, with their install folder, Wine/Proton prefix and how to start them.
+//! games Zom's Modzilla knows, with their install folder, Wine/Proton prefix and how to start them.
 //! Only read, never changed. Also which Proton each game runs with, and the Steam Deck.
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-/// A prefix folder as Zom's Nexus uses it (the one with drive_c in it).
+/// A prefix folder as Zom's Modzilla uses it (the one with drive_c in it).
 fn prefix_of(p: &Path) -> Option<PathBuf> {
     [p.join("pfx"), p.to_path_buf()].into_iter().find(|x| x.join("drive_c").is_dir())
 }

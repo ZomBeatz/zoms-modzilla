@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="branding/nexus-logo-dark.png">
-    <img src="branding/nexus-logo.png" alt="Zom's Nexus by ZomBeatz Media" width="460">
+    <source media="(prefers-color-scheme: dark)" srcset="branding/modzilla-logo-dark.png">
+    <img src="branding/modzilla-logo.png" alt="Zom's Modzilla by ZomBeatz Media" width="460">
   </picture>
 </p>
 
@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZomBeatz/zoms-nexus/releases/latest">Download</a> ·
-  <a href="https://zombeatz.github.io/zoms-nexus/">Try the online demo</a> ·
-  <a href="https://docs.zombeatzmedia.com/nexus/">Guide</a>
+  <a href="https://github.com/ZomBeatz/zoms-modzilla/releases/latest">Download</a> ·
+  <a href="https://zombeatz.github.io/zoms-modzilla/">Try the online demo</a> ·
+  <a href="https://docs.zombeatzmedia.com/modzilla/">Guide</a>
 </p>
 
 ## Quick start
@@ -22,20 +22,20 @@
 
    | Your Linux | File | How |
    |---|---|---|
-   | Ubuntu, Linux Mint, Pop!_OS, Debian, Zorin | `.deb` | Open it with your software installer, or `sudo apt install ./Zom*Nexus*.deb` |
-   | Fedora, Nobara, openSUSE | `.rpm` | Open it with your software installer, or `sudo dnf install ./Zom*Nexus*.rpm` (`sudo zypper install` on openSUSE) |
+   | Ubuntu, Linux Mint, Pop!_OS, Debian, Zorin | `.deb` | Open it with your software installer, or `sudo apt install ./Zom*Modzilla*.deb` |
+   | Fedora, Nobara, openSUSE | `.rpm` | Open it with your software installer, or `sudo dnf install ./Zom*Modzilla*.rpm` (`sudo zypper install` on openSUSE) |
    | Arch, CachyOS, Manjaro, EndeavourOS, SteamOS, anything else | `.AppImage` | Right-click > **Properties** > allow running it as a program, then open it |
 
 2. **Follow "Getting started"** at the top of the app. It walks you through:
    - **Connect your Nexus Mods account:** paste your personal API key from nexusmods.com > **Settings > API keys**. It stays on your computer.
-   - **Let the website's download buttons open Zom's Nexus**, so **Mod manager download** (and **Vortex**) buttons send files to the app.
+   - **Let the website's download buttons open Zom's Modzilla**, so **Mod manager download** (and **Vortex**) buttons send files to the app.
    - **Find your games:** Steam games are found by themselves; add others by hand.
    - **Get your first mod.**
 3. **Check Settings > This computer.** It shows what's set up and, for anything missing, the exact command to install it on your Linux.
 
 ### Optional extras
 
-Zom's Nexus runs without these, and says what each adds:
+Zom's Modzilla runs without these, and says what each adds:
 
 | For | Arch-based | Ubuntu, Debian, Mint | Fedora | openSUSE |
 |---|---|---|---|---|
@@ -46,7 +46,7 @@ Zom's Nexus runs without these, and says what each adds:
 
 ### If the window opens blank
 
-On some NVIDIA setups the window can stay white. Zom's Nexus already turns off the WebKit setting that usually causes it; if it still happens, start it from a terminal with `WEBKIT_DISABLE_COMPOSITING_MODE=1 zoms-nexus`.
+On some NVIDIA setups the window can stay white. Zom's Modzilla already turns off the WebKit setting that usually causes it; if it still happens, start it from a terminal with `WEBKIT_DISABLE_COMPOSITING_MODE=1 zoms-modzilla`.
 
 ## What it does
 
@@ -82,7 +82,7 @@ On some NVIDIA setups the window can stay white. Zom's Nexus already turns off t
 | **LOOT sorting** | Bethesda games' plugins sorted by LOOT's community masterlist, with its notes (incompatibilities, missing requirements, plugins that need cleaning). Kept per profile, apart from the mod order. |
 | **Baldur's Gate 3** | .pak mods go in the game's Mods folder and on its mod list (modsettings.lsx), in the profile's order; Script Extender and loose files go in the game folder. |
 | **Save snapshots** | A copy of a game's saves before trying risky mods (or by itself before each Play), put back in a click; nothing is ever deleted. |
-| **Saves per profile** | A heavily modded profile can keep its own saves; Zom's Nexus asks before the first Play and warns when Steam Cloud would copy saves back in. |
+| **Saves per profile** | A heavily modded profile can keep its own saves; Zom's Modzilla asks before the first Play and warns when Steam Cloud would copy saves back in. |
 | **Privacy** | No account of its own and no tracking. Your API key stays on your computer in a file only you can read. |
 
 Not done yet: a few Thunderstore games whose mods go in as whole zips (Godot games) or into the Proton prefix (Balatro) can be browsed but not installed. Collection files hosted outside Nexus Mods have to be fetched by hand.
@@ -106,18 +106,18 @@ Flathub: `packaging/flatpak/` has the manifest, desktop file and metainfo, and h
 
 | What | Where |
 |---|---|
-| Settings | `~/.config/com.zombeatz.zoms-nexus/settings.json` |
-| Your API key | `~/.config/com.zombeatz.zoms-nexus/api-key` (only you can read it) |
-| The download list | `~/.local/share/com.zombeatz.zoms-nexus/queue.json` |
+| Settings | `~/.config/com.zombeatz.zoms-modzilla/settings.json` |
+| Your API key | `~/.config/com.zombeatz.zoms-modzilla/api-key` (only you can read it) |
+| The download list | `~/.local/share/com.zombeatz.zoms-modzilla/queue.json` |
 | Mods | The library folder (**Settings > Storage**), `~/Games/Nexus Mods` at first |
-| Profiles | `~/.config/com.zombeatz.zoms-nexus/profiles.json` |
-| What's in each game now | `~/.local/share/com.zombeatz.zoms-nexus/deployed/<game>.json`, and the game's own replaced files in `<game folder>/.zoms-nexus-backup` |
-| Game art | `~/.cache/com.zombeatz.zoms-nexus/art` |
-| Each profile's mod settings | `~/.local/share/com.zombeatz.zoms-nexus/profile-settings/<profile>/` |
-| How each Play went | `~/.local/share/com.zombeatz.zoms-nexus/runs/<profile>.json` |
-| The AI service's key (if you set one) | `~/.config/com.zombeatz.zoms-nexus/ai-key` (only you can read it) |
-| Thunderstore's lists | `~/.cache/com.zombeatz.zoms-nexus/thunderstore` (fetched at most once an hour) |
+| Profiles | `~/.config/com.zombeatz.zoms-modzilla/profiles.json` |
+| What's in each game now | `~/.local/share/com.zombeatz.zoms-modzilla/deployed/<game>.json`, and the game's own replaced files in `<game folder>/.zoms-modzilla-backup` |
+| Game art | `~/.cache/com.zombeatz.zoms-modzilla/art` |
+| Each profile's mod settings | `~/.local/share/com.zombeatz.zoms-modzilla/profile-settings/<profile>/` |
+| How each Play went | `~/.local/share/com.zombeatz.zoms-modzilla/runs/<profile>.json` |
+| The AI service's key (if you set one) | `~/.config/com.zombeatz.zoms-modzilla/ai-key` (only you can read it) |
+| Thunderstore's lists | `~/.cache/com.zombeatz.zoms-modzilla/thunderstore` (fetched at most once an hour) |
 
 ## License
 
-[MIT](LICENSE). The ZomBeatz Media and Zom's Nexus names and logos aren't covered by it. Zom's Nexus isn't made by or connected with Nexus Mods; it uses the public Nexus Mods API with your own key.
+[MIT](LICENSE). The ZomBeatz Media and Zom's Modzilla names and logos aren't covered by it. Zom's Modzilla isn't made by or connected with Nexus Mods; it uses the public Nexus Mods API with your own key.

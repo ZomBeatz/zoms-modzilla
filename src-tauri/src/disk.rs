@@ -1,4 +1,4 @@
-//! What fills the drives Zom's Nexus uses, for the bar at the bottom left: unpacked mods, mod
+//! What fills the drives Zom's Modzilla uses, for the bar at the bottom left: unpacked mods, mod
 //! archives (zips), Steam games, and everything else.
 //!
 //! Mods are measured on disk (walking the library, so the answer is kept for two minutes);

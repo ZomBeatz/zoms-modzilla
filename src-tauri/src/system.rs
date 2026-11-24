@@ -1,4 +1,4 @@
-//! What this computer has for Zom's Nexus, since Linux distros differ: the tray library, the
+//! What this computer has for Zom's Modzilla, since Linux distros differ: the tray library, the
 //! notifier, a rar unpacker, xdg-mime for Nexus Mods links, Steam. Each optional piece is
 //! found before it's used, and Settings > This computer says how to add what's missing, with
 //! the command for the person's own distro.
@@ -117,7 +117,7 @@ pub fn check(tray: bool, links: bool, steam_libraries: usize, library: &Path) ->
         Item {
             what: "Library folder".into(),
             ok: lib_ok,
-            detail: if lib_ok { format!("Mods are kept in {}.", library.display()) } else { format!("Zom's Nexus can't write to {}. Pick another folder in Settings > Storage.", library.display()) },
+            detail: if lib_ok { format!("Mods are kept in {}.", library.display()) } else { format!("Zom's Modzilla can't write to {}. Pick another folder in Settings > Storage.", library.display()) },
             fix: None,
         },
         Item {
@@ -129,7 +129,7 @@ pub fn check(tray: bool, links: bool, steam_libraries: usize, library: &Path) ->
         Item {
             what: "Nexus Mods links".into(),
             ok: xdg && links,
-            detail: if !xdg { "xdg-mime is missing, so the website's Mod manager download button can't reach Zom's Nexus.".into() } else if links { "The website's Mod manager download button opens Zom's Nexus.".into() } else { "Not set up yet: Settings > Nexus Mods links > Open them with Zom's Nexus.".into() },
+            detail: if !xdg { "xdg-mime is missing, so the website's Mod manager download button can't reach Zom's Modzilla.".into() } else if links { "The website's Mod manager download button opens Zom's Modzilla.".into() } else { "Not set up yet: Settings > Nexus Mods links > Open them with Zom's Modzilla.".into() },
             fix: fix("links", xdg),
         },
         Item {
@@ -169,7 +169,7 @@ pub fn check(tray: bool, links: bool, steam_libraries: usize, library: &Path) ->
 
 /// Whether `dir` is somewhere a program can write (the library folder, a game folder).
 pub fn writable(dir: &Path) -> bool {
-    let probe = dir.join(".zoms-nexus-write-test");
+    let probe = dir.join(".zoms-modzilla-write-test");
     let ok = std::fs::write(&probe, b"").is_ok();
     let _ = std::fs::remove_file(&probe);
     ok

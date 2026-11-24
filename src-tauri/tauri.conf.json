@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Zom's Nexus",
-  "mainBinaryName": "zoms-nexus",
+  "productName": "Zom's Modzilla",
+  "mainBinaryName": "zoms-modzilla",
   "version": "0.0.1",
-  "identifier": "com.zombeatz.zoms-nexus",
+  "identifier": "com.zombeatz.zoms-modzilla",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1440",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Zom's Nexus",
+        "title": "Zom's Modzilla",
         "width": 1280,
         "height": 820,
         "minWidth": 860,

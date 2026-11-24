@@ -1,4 +1,4 @@
-//! The computer outside a Flatpak sandbox. Installed from Flathub, Zom's Nexus runs in a
+//! The computer outside a Flatpak sandbox. Installed from Flathub, Zom's Modzilla runs in a
 //! sandbox that can't see other programs or start them directly: games, Steam, Lutris and
 //! Heroic run on the computer itself, so they're started and watched through `flatpak-spawn
 //! --host` (allowed by the Flatpak's `--talk-name=org.freedesktop.Flatpak`). Installed any other

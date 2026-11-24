@@ -54,7 +54,7 @@ pub fn save_key(dir: &Path, key: Option<&str>) -> Result<(), String> {
     }
 }
 
-const SYSTEM: &str = "You help someone use Zom's Nexus, a mod manager for Linux (Steam, Proton, Steam Deck), to get modded games working. \
+const SYSTEM: &str = "You help someone use Zom's Modzilla, a mod manager for Linux (Steam, Proton, Steam Deck), to get modded games working. \
 Below is what the app knows about their setup, gathered automatically: the game, the profile's mods in load order, the app's own conflict check, \
 what the game's mod loaders logged, and how the last run went. Use it before asking questions. \
 Answer plainly and briefly, for a player rather than a programmer: name the mod that's most likely at fault and why, then the steps to fix it, \

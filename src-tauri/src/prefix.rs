@@ -113,7 +113,7 @@ pub fn installed(prefix: &Path) -> Vec<String> {
 /// The command that installs `verb` in the prefix (no window: -q).
 pub fn install_cmd(via: &Via, app: Option<u32>, prefix: &Path, verb: &str) -> Result<Command, String> {
     if !verb_ok(verb) {
-        return Err("Zom's Nexus doesn't know that one.".into());
+        return Err("Zom's Modzilla doesn't know that one.".into());
     }
     Ok(match via {
         Via::Protontricks => {
@@ -219,7 +219,7 @@ pub fn files_under(dir: &Path) -> HashSet<String> {
             let p = e.path();
             let Ok(t) = e.file_type() else { continue };
             if t.is_dir() {
-                if p.file_name().is_some_and(|n| n == crate::deploy::BACKUP) {
+                if p.file_name().is_some_and(|n| n == crate::deploy::BACKUP || n == crate::legacy::OLD_BACKUP) {
                     continue;
                 }
                 stack.push(p);

@@ -441,8 +441,8 @@ function CheckPanel({ report, gameName, gameDomain, onCopied, onSwitchOff, onUpd
                   {n.kind === "notDownloaded" && ", which isn't downloaded."}
                   {n.kind === "notInProfile" && ", which is in your library but not in this profile."}
                   {n.kind === "switchedOff" && ", which is switched off in this profile."}
-                  {n.kind === "external" && " from outside Nexus Mods. Zom's Nexus can't check this one; get it from its page."}
-                  {n.kind === "otherGame" && " (a tool on Nexus Mods). Zom's Nexus can't check this one; see its page."}
+                  {n.kind === "external" && " from outside Nexus Mods. Zom's Modzilla can't check this one; get it from its page."}
+                  {n.kind === "otherGame" && " (a tool on Nexus Mods). Zom's Modzilla can't check this one; see its page."}
                   {n.kind === "unavailable" && ", which its author took down on Nexus Mods (or it was removed), so it can't be downloaded. Check its page for a replacement; without it, the mod may not work."}
                 </>
               )}
@@ -534,8 +534,8 @@ function CheckPanel({ report, gameName, gameDomain, onCopied, onSwitchOff, onUpd
                   {n.kind === "notDownloaded" && ", which isn't downloaded."}
                   {n.kind === "notInProfile" && ", which is in your library but not in this profile."}
                   {n.kind === "switchedOff" && ", which is switched off in this profile."}
-                  {n.kind === "external" && " from outside Nexus Mods. Zom's Nexus can't check this one; get it from its page."}
-                  {n.kind === "otherGame" && " (a tool on Nexus Mods). Zom's Nexus can't check this one; see its page."}
+                  {n.kind === "external" && " from outside Nexus Mods. Zom's Modzilla can't check this one; get it from its page."}
+                  {n.kind === "otherGame" && " (a tool on Nexus Mods). Zom's Modzilla can't check this one; see its page."}
                   {n.kind === "unavailable" && ", which its author took down on Nexus Mods (or it was removed), so it can't be downloaded. Check its page for a replacement; without it, the mod may not work."}
                 </>
               )}
@@ -681,7 +681,7 @@ function PasteCode({ onClose, onOpened }: { onClose: () => void; onOpened: (r: {
       <p className="muted small" style={{ marginTop: 0 }}>
         A share code is a profile someone copied with <b>Copy share code</b>. It lists Nexus Mods numbers only: you'll get a profile with the same mods, and the ones you don't have are added to downloads (free accounts click each file, as usual).
       </p>
-      <textarea className="mono" rows={5} autoFocus placeholder="ZN1-…" value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} />
+      <textarea className="mono" rows={5} autoFocus placeholder="ZM1-…" value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} />
       {error && <p className="err-text small">{error}</p>}
     </Dialog>
   );
@@ -866,7 +866,7 @@ export function Profiles({ game, setGame, toast, libraryVersion, go, reloadGames
       queued = r?.queued.length ?? 0;
     }
     const said = [...f.done, queued ? `added ${plural(queued, "missing requirement")} to downloads` : ""].filter(Boolean);
-    toast(said.length ? `${said.join("; ")}.`.replace(/^./, (c) => c.toUpperCase()) : "Nothing left that Zom's Nexus can fix by itself. The rest needs a look.");
+    toast(said.length ? `${said.join("; ")}.`.replace(/^./, (c) => c.toUpperCase()) : "Nothing left that Zom's Modzilla can fix by itself. The rest needs a look.");
   };
   const fileName = (mid: number, fid: number) => mods.find((m) => m.game === open?.game && m.modId === mid)?.files.find((f) => f.fileId === fid)?.name;
 
@@ -1277,7 +1277,7 @@ export function Profiles({ game, setGame, toast, libraryVersion, go, reloadGames
                   title="Copy this profile as a code to paste in a message: Nexus Mods numbers only, never the mods' files"
                   onClick={async () => {
                     const code = await run("share", () => api.shareCode(open.id));
-                    if (code) await navigator.clipboard.writeText(code).then(() => toast(`Copied a share code for “${open.name}” (${Math.ceil(code.length / 1000)} KB of text). Whoever pastes it in Zom's Nexus gets the same mods.`), () => toast("Couldn't copy the code."));
+                    if (code) await navigator.clipboard.writeText(code).then(() => toast(`Copied a share code for “${open.name}” (${Math.ceil(code.length / 1000)} KB of text). Whoever pastes it in Zom's Modzilla gets the same mods.`), () => toast("Couldn't copy the code."));
                   }}
                 >
                   <Share2 size={15} /> Copy share code

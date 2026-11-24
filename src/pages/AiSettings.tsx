@@ -50,7 +50,7 @@ export function AiSettings({ toast }: { toast: (t: string) => void }) {
     <div className="panel">
       <h3>AI help {on ? <span className="pill accent">on</span> : <span className="pill">off</span>}</h3>
       <p className="lead">
-        Optional. Ask an AI about a profile: why a game won't start, what a crash log means, which mod to blame. Zom's Nexus gathers what it knows (the check, the game's logs, the last runs), takes out your home folder and names, shows it to you, and sends it only when you press Send. Bring any service: each has its own prices and privacy rules; one on this computer keeps everything here.
+        Optional. Ask an AI about a profile: why a game won't start, what a crash log means, which mod to blame. Zom's Modzilla gathers what it knows (the check, the game's logs, the last runs), takes out your home folder and names, shows it to you, and sends it only when you press Send. Bring any service: each has its own prices and privacy rules; one on this computer keeps everything here.
       </p>
       <label className="setting">
         <span className="what">

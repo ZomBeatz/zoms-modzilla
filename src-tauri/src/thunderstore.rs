@@ -55,7 +55,7 @@ pub struct TsGame {
     pub community: String,
     pub name: String,
     pub loader: String,
-    /// Zom's Nexus can put this loader's mods in.
+    /// Zom's Modzilla can put this loader's mods in.
     pub supported: bool,
     /// r2modman's folder name for the game (its profiles live under it).
     #[serde(skip_serializing)]
@@ -152,7 +152,7 @@ pub fn game_in(schema: &Value, steam: Option<u32>, domain: &str, name: &str) -> 
     }
     let loaders = schema["modloaderPackages"].as_array().map(|a| a.iter().filter(|p| p["loader"].as_str() == Some(&loader)).filter_map(|p| Some((p["packageId"].as_str()?.to_lowercase(), p["rootFolder"].as_str().unwrap_or("").to_string()))).collect()).unwrap_or_default();
     let r2_folder = r["internalFolderName"].as_str().unwrap_or("").to_string();
-    // Zom's Nexus can put mods in when it knows where each file goes, and mods are folders
+    // Zom's Modzilla can put mods in when it knows where each file goes, and mods are folders
     // (not zips that go in whole, like Godot's).
     let supported = !rules.is_empty() && !zipped && loader != "none";
     Some(TsGame { community, name: g["meta"]["displayName"].as_str().unwrap_or(label).to_string(), supported, loader, r2_folder, rules, loaders })

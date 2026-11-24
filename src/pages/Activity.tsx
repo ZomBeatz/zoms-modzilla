@@ -141,7 +141,7 @@ export function Activity({ go, toast, libraryVersion, gameStates, game, games }:
       const queued = f.download.length ? (await api.queueRequirements(p.game, f.download)).queued.length : 0;
       await recheck(p.id);
       const said = [...f.done, queued ? `added ${plural(queued, "missing requirement")} to downloads` : ""].filter(Boolean);
-      toast(said.length ? `“${p.name}”: ${said.join("; ")}.` : `Nothing in “${p.name}” that Zom's Nexus can fix by itself. Open it for a look.`);
+      toast(said.length ? `“${p.name}”: ${said.join("; ")}.` : `Nothing in “${p.name}” that Zom's Modzilla can fix by itself. Open it for a look.`);
     });
   const applyProfile = (p: Profile) =>
     busyRun(`apply:${p.id}`, async () => {

@@ -1,4 +1,4 @@
-//! Zom's Nexus: a Nexus Mods download manager for Linux.
+//! Zom's Modzilla: a Nexus Mods download manager for Linux.
 //!
 //! - `nexus`: the Nexus Mods API with your own API key.
 //! - `nxm`: the nxm:// links the website's **Mod manager download** button opens.
@@ -10,8 +10,8 @@
 //!   and shared as mod packs. `check` finds file conflicts and plugin problems first.
 //! - `updates`: newer versions of the files in the library.
 //!
-//! Settings live in ~/.config/com.zombeatz.zoms-nexus, the download list in
-//! ~/.local/share/com.zombeatz.zoms-nexus, and the mods themselves in the library folder you pick
+//! Settings live in ~/.config/com.zombeatz.zoms-modzilla, the download list in
+//! ~/.local/share/com.zombeatz.zoms-modzilla, and the mods themselves in the library folder you pick
 //! (~/Games/Nexus Mods at first).
 
 mod activity;
@@ -32,6 +32,7 @@ mod games;
 mod history;
 mod host;
 mod launchers;
+mod legacy;
 mod launchopts;
 mod layers;
 mod library;
@@ -445,7 +446,7 @@ async fn library_move_game(app: State<'_, App>, game: String, to: Option<String>
     Ok(moved)
 }
 
-/// Save what Zom's Nexus knows (profiles, notes, tags, restore points, settings) to one file.
+/// Save what Zom's Modzilla knows (profiles, notes, tags, restore points, settings) to one file.
 #[tauri::command]
 fn app_backup(app: State<'_, App>, path: String) -> Res<usize> {
     let b = backup::make(&app.config_dir, &app.data_dir, queue::now());
@@ -668,7 +669,7 @@ fn list_games(app: &App) -> Vec<games::Game> {
             proton: None,
         });
     }
-    // Heroic (GOG, Epic, Amazon) and Lutris games Zom's Nexus knows, when Steam doesn't have them.
+    // Heroic (GOG, Epic, Amazon) and Lutris games Zom's Modzilla knows, when Steam doesn't have them.
     for f in launchers_cached() {
         let Some((domain, name)) = launchers::known_for(&f.title) else { continue };
         if list.iter().any(|g| g.domain == domain) {
@@ -733,7 +734,7 @@ struct GoneGame {
     profiles: usize,
 }
 
-/// Games uninstalled since Zom's Nexus last saw them, with mods still in the library (and not
+/// Games uninstalled since Zom's Modzilla last saw them, with mods still in the library (and not
 /// marked to keep). Notes where the installed ones live as it goes. Reads only this computer.
 #[tauri::command]
 async fn games_gone(app: State<'_, App>) -> Res<Vec<GoneGame>> {
@@ -768,7 +769,7 @@ async fn games_gone(app: State<'_, App>) -> Res<Vec<GoneGame>> {
 #[tauri::command]
 async fn games_gone_answer(app: State<'_, App>, domain: String, delete: bool, profiles_too: bool) -> Res<u64> {
     let mut seen = gone::load(&app.data_dir);
-    let k = seen.get(&domain).cloned().ok_or("Zom's Nexus doesn't know that game.")?;
+    let k = seen.get(&domain).cloned().ok_or("Zom's Modzilla doesn't know that game.")?;
     if !gone::uninstalled(Path::new(&k.path)) {
         return Err(format!("{} is still installed (or its drive isn't connected), so its mods were left alone.", k.name));
     }
@@ -984,7 +985,7 @@ async fn diagnostics(app: State<'_, App>, path: String) -> Res<()> {
     let sys = system::check(app.has_tray.load(std::sync::atomic::Ordering::Relaxed), nxm_status().ours, games::steam_library_dirs().len(), &lib_dir(&app));
     let jobs: Vec<String> = app.queue.list().iter().map(|j| format!("{:?} {} {}/{} {} {}", j.status, j.game, j.mod_id, j.file_id, j.mod_name, j.error.clone().unwrap_or_default())).collect();
     let report = serde_json::json!({
-        "app": format!("Zom's Nexus {}", nexus::APP_VERSION),
+        "app": format!("Zom's Modzilla {}", nexus::APP_VERSION),
         "system": sys,
         "webkit_dmabuf_off": std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").ok(),
         "account": app.user.lock().unwrap().as_ref().map(|u| if u.is_premium { "Premium" } else { "free" }),
@@ -1589,7 +1590,7 @@ fn find_profile(app: &App, id: &str) -> Res<deploy::Profile> {
 fn game_target(app: &App, domain: &str) -> Res<(PathBuf, String, Option<PathBuf>, games::Game)> {
     let g = list_games(app).into_iter().find(|g| g.domain == domain).ok_or("Add this game on the Games page first, with its install folder.")?;
     let root = g.path.clone().map(PathBuf::from).ok_or("Set this game's install folder on the Games page first.")?;
-    let folder = g.mod_folder.clone().ok_or("Zom's Nexus doesn't know where this game's mods go yet. Set its mod folder on the Games page.")?;
+    let folder = g.mod_folder.clone().ok_or("Zom's Modzilla doesn't know where this game's mods go yet. Set its mod folder on the Games page.")?;
     let prefix = g.proton_prefix.clone().map(PathBuf::from);
     Ok((root, folder, prefix, g))
 }
@@ -1838,7 +1839,7 @@ async fn apply_profile(app: &App, id: &str) -> Res<deploy::Applied> {
             tokio::task::spawn_blocking(move || saves::switch(&live, &want)).await.map_err(|e| e.to_string())??;
         }
     } else if p.own_saves {
-        return Err("This profile keeps its own saves, but Zom's Nexus doesn't know where this game's saves are. Set its save folder on the Games page.".into());
+        return Err("This profile keeps its own saves, but Zom's Modzilla doesn't know where this game's saves are. Set its save folder on the Games page.".into());
     }
     let lib = lib_dir(app);
     let data = app.data_dir.clone();
@@ -2000,7 +2001,7 @@ async fn profile_clear(app: State<'_, App>, game: String) -> Res<()> {
     clear_game(&app, game).await
 }
 
-/// Every game's mods out, its own files and usual saves back: before uninstalling Zom's Nexus,
+/// Every game's mods out, its own files and usual saves back: before uninstalling Zom's Modzilla,
 /// say. Games running now are left alone. Gives the names of the games done and the ones left.
 #[tauri::command]
 async fn games_clear_all(app: State<'_, App>) -> Res<(Vec<String>, Vec<String>)> {
@@ -2147,7 +2148,7 @@ async fn profile_export(app: State<'_, App>, id: String, path: String) -> Res<()
 }
 
 /// The start of every share code, so a pasted one is recognised (and a future format can differ).
-const SHARE: &str = "ZN1-";
+const SHARE: &str = "ZM1-";
 
 /// A profile as a share code: its mod pack (Nexus Mods numbers and names only), packed small
 /// into text to paste in a message. Opening it works like opening the pack file.
@@ -2167,7 +2168,7 @@ async fn profile_import_code(app: State<'_, App>, code: String) -> Res<PackImpor
     use base64::Engine;
     use std::io::Read;
     let code: String = code.split_whitespace().collect();
-    let body = code.strip_prefix(SHARE).ok_or("That isn't a Zom's Nexus share code (they start with ZN1-).")?;
+    let body = code.strip_prefix(SHARE).or_else(|| code.strip_prefix(legacy::OLD_SHARE)).ok_or("That isn't a Zom's Modzilla share code (they start with ZM1-).")?;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(body).map_err(|_| "That share code is incomplete or changed. Copy it again.".to_string())?;
     let mut text = String::new();
     // At most 5 MB unpacked, like a pack file.
@@ -2243,7 +2244,7 @@ struct TsAdded {
 async fn ts_add(handle: AppHandle, app: State<'_, App>, game: String, full_name: String, profile: Option<String>) -> Res<TsAdded> {
     let g = ts_game_of(&app, &game).await?.ok_or("This game isn't on Thunderstore.")?;
     if !g.supported {
-        return Err(format!("{} uses {} on Thunderstore, which Zom's Nexus can't put in yet (BepInEx games work).", g.name, g.loader));
+        return Err(format!("{} uses {} on Thunderstore, which Zom's Modzilla can't put in yet (BepInEx games work).", g.name, g.loader));
     }
     let list = thunderstore::listing(app.nexus.http(), &app.cache_dir, &g.community).await?;
     let (chain, missing) = thunderstore::resolve(&list, &full_name, None);
@@ -2480,7 +2481,7 @@ async fn r2_profiles(app: State<'_, App>, game: String) -> Res<Vec<R2Profile>> {
 async fn r2_import(handle: AppHandle, app: State<'_, App>, game: String, code: Option<String>, folder: Option<String>) -> Res<TsAdded> {
     let g = ts_game_of(&app, &game).await?.ok_or("This game isn't on Thunderstore.")?;
     if !g.supported {
-        return Err(format!("{} uses {} on Thunderstore, which Zom's Nexus can't put in yet.", g.name, g.loader));
+        return Err(format!("{} uses {} on Thunderstore, which Zom's Modzilla can't put in yet.", g.name, g.loader));
     }
     let (name, list_text, configs): (String, String, Vec<(String, Vec<u8>)>) = match (code, folder) {
         (Some(c), _) => {
@@ -2583,7 +2584,7 @@ fn open_steam(handle: AppHandle, what: String) -> Res<()> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SteamEntry {
-    /// Zom's Nexus is in Steam's library already.
+    /// Zom's Modzilla is in Steam's library already.
     added: bool,
     steam_running: bool,
     /// What Steam would start.
@@ -2609,18 +2610,18 @@ fn steam_entry() -> SteamEntry {
     SteamEntry { added, steam_running: steamshortcut::steam_running(), program: program.map(|p| p.to_string_lossy().into_owned()), app_image: std::env::var_os("APPIMAGE").is_some(), dev, has_steam: user.is_some() }
 }
 
-/// Put Zom's Nexus in Steam's library as a game, with artwork, for Game Mode on a Steam Deck.
-/// Steam must be closed (it rewrites the file when it closes); with `restart`, Zom's Nexus closes
+/// Put Zom's Modzilla in Steam's library as a game, with artwork, for Game Mode on a Steam Deck.
+/// Steam must be closed (it rewrites the file when it closes); with `restart`, Zom's Modzilla closes
 /// Steam itself, adds the entry and starts Steam again.
 #[tauri::command]
 async fn steam_add(restart: bool) -> Res<bool> {
     let user = steamshortcut::user_dir().ok_or("Steam isn't set up on this computer (no Steam user found).")?;
-    let exe = steamshortcut::program().ok_or("Couldn't tell where Zom's Nexus is installed.")?;
+    let exe = steamshortcut::program().ok_or("Couldn't tell where Zom's Modzilla is installed.")?;
     let mut closed = false;
     if steamshortcut::steam_running() {
         // In Game Mode, Steam *is* the session: closing it would end it.
         if launchers::device().game_mode {
-            return Err("In Game Mode, Steam can't be closed to add Zom's Nexus. Switch to Desktop Mode (STEAM › Power › Switch to Desktop), then press Add to Steam there.".into());
+            return Err("In Game Mode, Steam can't be closed to add Zom's Modzilla. Switch to Desktop Mode (STEAM › Power › Switch to Desktop), then press Add to Steam there.".into());
         }
         if !restart {
             return Err("steamRunning".into());
@@ -2701,7 +2702,7 @@ async fn ai_context(app: State<'_, App>, profile: Option<String>, game: Option<S
     let dev = launchers::device();
     let mut t = String::new();
     let os = Some(host::os_release()).and_then(|o| o.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=")).map(|v| v.trim_matches('"').to_string())).unwrap_or_else(|| "Linux".into());
-    let _ = writeln!(t, "App: Zom's Nexus {} on {os}{}{}", nexus::APP_VERSION, if dev.deck { ", Steam Deck" } else { "" }, if dev.game_mode { " (Game Mode)" } else { "" });
+    let _ = writeln!(t, "App: Zom's Modzilla {} on {os}{}{}", nexus::APP_VERSION, if dev.deck { ", Steam Deck" } else { "" }, if dev.game_mode { " (Game Mode)" } else { "" });
     if let Some(g) = &g {
         let _ = writeln!(t, "\n## Game: {} ({})", g.name, g.domain);
         let _ = writeln!(t, "From: {}. Runs with: {}. Install folder: {}. Mod folder: {}.", g.source, g.proton.clone().unwrap_or_else(|| if g.proton_prefix.is_some() { "Proton".into() } else { "native Linux or unknown".into() }), g.path.clone().unwrap_or_default(), g.mod_folder.clone().unwrap_or_else(|| "(not set)".into()));
@@ -2770,7 +2771,7 @@ async fn ai_context(app: State<'_, App>, profile: Option<String>, game: Option<S
             }
         }
     }
-    let _ = writeln!(t, "\n## Zom's Nexus's own recent log");
+    let _ = writeln!(t, "\n## Zom's Modzilla's own recent log");
     let tail = log::tail(400);
     for l in tail.lines().filter(|l| l.contains(&domain) || l.contains("WARN") || l.contains("ERROR")).rev().take(30).collect::<Vec<_>>().into_iter().rev() {
         let _ = writeln!(t, "{l}");
@@ -2814,7 +2815,7 @@ async fn ai_ask(handle: AppHandle, app: State<'_, App>, context: String, message
 /// A game's save folder now, and whose saves are in it.
 fn live_saves(app: &App, game: &str) -> Res<(PathBuf, String, games::Game)> {
     let g = list_games(app).into_iter().find(|g| g.domain == game).ok_or("That game isn't on the Games page.")?;
-    let live = g.save_folder.clone().map(PathBuf::from).ok_or("Zom's Nexus doesn't know where this game keeps its saves. Set the save folder on the Games page.")?;
+    let live = g.save_folder.clone().map(PathBuf::from).ok_or("Zom's Modzilla doesn't know where this game keeps its saves. Set the save folder on the Games page.")?;
     let owner = saves::owner(&live);
     Ok((live, owner, g))
 }
@@ -2913,7 +2914,7 @@ struct AppUpdate {
     version: String,
 }
 
-/// Whether a newer Zom's Nexus is out (asked at most once a day, when the setting is on).
+/// Whether a newer Zom's Modzilla is out (asked at most once a day, when the setting is on).
 #[tauri::command]
 async fn app_update(app: State<'_, App>) -> Res<AppUpdate> {
     let flatpak = host::in_flatpak();
@@ -3041,7 +3042,7 @@ async fn import_addon(app: &App, pack: &profiles::Pack) -> Res<PackImported> {
 
 // ---------- nxm:// links ----------
 
-const NXM_DESKTOP: &str = "com.zombeatz.zoms-nexus-nxm.desktop";
+const NXM_DESKTOP: &str = "com.zombeatz.zoms-modzilla-nxm.desktop";
 
 fn applications_dir() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
@@ -3076,7 +3077,7 @@ fn exec_quote(p: &str) -> String {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LinkStatus {
-    /// Zom's Nexus opens nxm:// links.
+    /// Zom's Modzilla opens nxm:// links.
     ours: bool,
     /// The program that opens them now, if another one does.
     other: Option<String>,
@@ -3086,11 +3087,13 @@ struct LinkStatus {
 fn nxm_status() -> LinkStatus {
     let out = host::command("xdg-mime").args(["query", "default", "x-scheme-handler/nxm"]).output();
     let current = out.ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-    let ours = current == NXM_DESKTOP || current == FLATPAK_DESKTOP || current == "zoms-nexus.desktop" || current == "Zom's Nexus.desktop";
+    let ours = current == NXM_DESKTOP || current == FLATPAK_DESKTOP || current == "zoms-modzilla.desktop" || current == "Zom's Modzilla.desktop";
+    // Still the old name's (Zom's Nexus): it's moved over on the first start.
+    let ours = ours || current == legacy::OLD_NXM_DESKTOP || current == legacy::OLD_DESKTOP;
     LinkStatus { ours, other: (!ours && !current.is_empty()).then_some(current) }
 }
 
-/// What this computer has for Zom's Nexus, with how to add what's missing.
+/// What this computer has for Zom's Modzilla, with how to add what's missing.
 #[tauri::command]
 async fn system_check(app: State<'_, App>) -> Res<system::Report> {
     let tray = app.has_tray.load(std::sync::atomic::Ordering::Relaxed);
@@ -3100,7 +3103,7 @@ async fn system_check(app: State<'_, App>) -> Res<system::Report> {
 }
 
 /// The desktop file Flathub installs (it lists nxm links itself).
-const FLATPAK_DESKTOP: &str = "com.zombeatz.zoms-nexus.desktop";
+const FLATPAK_DESKTOP: &str = "com.zombeatz.zoms-modzilla.desktop";
 
 #[tauri::command]
 fn nxm_register() -> Res<LinkStatus> {
@@ -3108,7 +3111,7 @@ fn nxm_register() -> Res<LinkStatus> {
     if host::in_flatpak() {
         let ok = host::command("xdg-mime").args(["default", FLATPAK_DESKTOP, "x-scheme-handler/nxm"]).status().map(|s| s.success()).unwrap_or(false);
         if !ok {
-            return Err("Couldn't set Zom's Nexus as the program for Nexus Mods links.".into());
+            return Err("Couldn't set Zom's Modzilla as the program for Nexus Mods links.".into());
         }
         return Ok(nxm_status());
     }
@@ -3116,14 +3119,14 @@ fn nxm_register() -> Res<LinkStatus> {
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let exe = program()?;
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName=Zom's Nexus\nComment=Opens Nexus Mods download links in Zom's Nexus\nExec={} %u\nIcon=zoms-nexus\nTerminal=false\nNoDisplay=true\nMimeType=x-scheme-handler/nxm;\n",
+        "[Desktop Entry]\nType=Application\nName=Zom's Modzilla\nComment=Opens Nexus Mods download links in Zom's Modzilla\nExec={} %u\nIcon=zoms-modzilla\nTerminal=false\nNoDisplay=true\nMimeType=x-scheme-handler/nxm;\n",
         exec_quote(&exe.to_string_lossy())
     );
     fs::write(dir.join(NXM_DESKTOP), entry).map_err(|e| e.to_string())?;
     let _ = std::process::Command::new("update-desktop-database").arg(&dir).output();
     let ok = std::process::Command::new("xdg-mime").args(["default", NXM_DESKTOP, "x-scheme-handler/nxm"]).status().map(|s| s.success()).unwrap_or(false);
     if !ok {
-        return Err("Couldn't set Zom's Nexus as the program for Nexus Mods links (xdg-mime is missing or failed).".into());
+        return Err("Couldn't set Zom's Modzilla as the program for Nexus Mods links (xdg-mime is missing or failed).".into());
     }
     Ok(nxm_status())
 }
@@ -3188,7 +3191,7 @@ fn show_main(handle: &AppHandle) {
 
 /// A desktop notification (through notify-send, when it's installed).
 fn notify(title: &str, body: &str) {
-    let _ = std::process::Command::new("notify-send").args(["-a", "Zom's Nexus", "-i", "zoms-nexus", title, body]).spawn();
+    let _ = std::process::Command::new("notify-send").args(["-a", "Zom's Modzilla", "-i", "zoms-modzilla", title, body]).spawn();
 }
 
 /// Started with the computer: open in the background, only to carry on with downloads.
@@ -3198,10 +3201,10 @@ fn config_home() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
-/// Add or take away the entry that starts Zom's Nexus when you sign in.
+/// Add or take away the entry that starts Zom's Modzilla when you sign in.
 fn set_autostart(on: bool) -> Res<()> {
     let dir = config_home().ok_or("Couldn't find your config folder.")?.join("autostart");
-    let file = dir.join("zoms-nexus.desktop");
+    let file = dir.join("zoms-modzilla.desktop");
     if !on {
         let _ = fs::remove_file(&file);
         return Ok(());
@@ -3209,10 +3212,10 @@ fn set_autostart(on: bool) -> Res<()> {
     let exe = program()?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName=Zom's Nexus\nComment=Carries on with unfinished mod downloads\nExec={} {BACKGROUND}\nIcon=zoms-nexus\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+        "[Desktop Entry]\nType=Application\nName=Zom's Modzilla\nComment=Carries on with unfinished mod downloads\nExec={} {BACKGROUND}\nIcon=zoms-modzilla\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
         exec_quote(&exe.to_string_lossy())
     );
-    fs::write(&file, entry).map_err(|e| format!("Couldn't set Zom's Nexus to start with the computer: {e}"))
+    fs::write(&file, entry).map_err(|e| format!("Couldn't set Zom's Modzilla to start with the computer: {e}"))
 }
 
 // ---------- the Nexus Mods window ----------
@@ -3243,7 +3246,7 @@ async fn nexus_window(handle: AppHandle, url: String) -> Res<()> {
     }
     let (h1, h2) = (handle.clone(), handle.clone());
     tauri::WebviewWindowBuilder::new(&handle, NEXUS_WINDOW, tauri::WebviewUrl::External(u))
-        .title("Nexus Mods · Zom's Nexus")
+        .title("Nexus Mods · Zom's Modzilla")
         .inner_size(1100.0, 820.0)
         .min_inner_size(600.0, 400.0)
         // The Slow download button opens an nxm:// link: take it here, straight into the queue.
@@ -3277,6 +3280,31 @@ fn nexus_window_close(handle: AppHandle) {
 /// Put the app's icon in your icon theme (~/.local/share/icons), so the window, the task bar and
 /// the Nexus Mods link entry show it. A dev build also gets a hidden desktop entry, because
 /// Wayland desktops find a window's icon through one; installed packages bring their own.
+/// The old name's desktop files: the nxm link handler and starting with the computer are made
+/// again under the new name (only when they were set up), and the old ones go.
+fn rename_desktop_files(autostart: bool) {
+    let Some(apps) = applications_dir() else { return };
+    let old_nxm = apps.join(legacy::OLD_NXM_DESKTOP);
+    if old_nxm.exists() {
+        let _ = fs::remove_file(&old_nxm);
+        let _ = nxm_register();
+    }
+    let old_dev = apps.join(legacy::OLD_DESKTOP);
+    if fs::read_to_string(&old_dev).is_ok_and(|t| t.contains(legacy::OLD_DEV_MARK)) {
+        let _ = fs::remove_file(&old_dev);
+    }
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        for size in ["32x32", "128x128", "256x256", "512x512"] {
+            let _ = fs::remove_file(home.join(".local/share/icons/hicolor").join(size).join("apps/zoms-nexus.png"));
+        }
+    }
+    if let Some(cfg) = config_home() {
+        if fs::remove_file(cfg.join("autostart").join(legacy::OLD_DESKTOP)).is_ok() || autostart {
+            let _ = set_autostart(true);
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn install_icon() {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
@@ -3287,25 +3315,25 @@ fn install_icon() {
         ("256x256", &include_bytes!("../icons/256x256.png")[..]),
         ("512x512", &include_bytes!("../icons/512x512.png")[..]),
     ] {
-        let file = icons.join(size).join("apps/zoms-nexus.png");
+        let file = icons.join(size).join("apps/zoms-modzilla.png");
         if fs::read(&file).ok().as_deref() != Some(bytes) {
             let _ = fs::create_dir_all(file.parent().unwrap());
             let _ = fs::write(&file, bytes);
         }
     }
-    // The window's app id is "zoms-nexus", so the desktop finds its icon through
-    // zoms-nexus.desktop, the same name the .deb and .rpm install in /usr/share/applications.
+    // The window's app id is "zoms-modzilla", so the desktop finds its icon through
+    // zoms-modzilla.desktop, the same name the .deb and .rpm install in /usr/share/applications.
     // A dev build writes a personal one (marked as ours); any other build deletes that copy, so
     // it never hides the installed entry.
     let Some(dir) = applications_dir() else { return };
-    let file = dir.join("zoms-nexus.desktop");
+    let file = dir.join("zoms-modzilla.desktop");
     let ours = fs::read_to_string(&file).map(|t| t.contains(DEV_MARK)).unwrap_or(false);
-    // The .deb and .rpm install "Zom's Nexus.desktop" (it names the window's app id itself).
-    let installed = ["/usr/share/applications/zoms-nexus.desktop", "/usr/share/applications/Zom's Nexus.desktop"].iter().any(|p| std::path::Path::new(p).exists());
+    // The .deb and .rpm install "Zom's Modzilla.desktop" (it names the window's app id itself).
+    let installed = ["/usr/share/applications/zoms-modzilla.desktop", "/usr/share/applications/Zom's Modzilla.desktop"].iter().any(|p| std::path::Path::new(p).exists());
     if cfg!(debug_assertions) && !installed {
         if let Ok(exe) = program() {
             let entry = format!(
-                "[Desktop Entry]\nType=Application\nName=Zom's Nexus (dev)\nExec={}\nIcon=zoms-nexus\nTerminal=false\nNoDisplay=true\n{DEV_MARK}\n",
+                "[Desktop Entry]\nType=Application\nName=Zom's Modzilla (dev)\nExec={}\nIcon=zoms-modzilla\nTerminal=false\nNoDisplay=true\n{DEV_MARK}\n",
                 exec_quote(&exe.to_string_lossy())
             );
             if fs::read_to_string(&file).ok().as_deref() != Some(entry.as_str()) && (ours || !file.exists()) {
@@ -3788,7 +3816,7 @@ async fn loader_install(app: State<'_, App>, game: String, id: String) -> Res<li
             })?;
             (format!("ReShade ({})", setup.trim_start_matches("ReShade_Setup_").trim_end_matches(".exe")), dll)
         }
-        _ => return Err("Zom's Nexus doesn't know that loader.".into()),
+        _ => return Err("Zom's Modzilla doesn't know that loader.".into()),
     };
     let game2 = game.clone();
     let tmp2 = tmp.clone();
@@ -3826,7 +3854,7 @@ fn remote_start(handle: AppHandle) -> Res<RemotePage> {
         }
         remote::Sent::Link(l) => {
             let _ = h.emit("remote:link", l);
-            "Sent: look at Zom's Nexus to carry on.".into()
+            "Sent: look at Zom's Modzilla to carry on.".into()
         }
         remote::Sent::Key(k) => match tauri::async_runtime::block_on(use_key(&h.state::<App>(), k)) {
             Ok(o) => {
@@ -3876,9 +3904,11 @@ fn take_args(handle: &AppHandle, args: &[String]) {
 }
 
 #[cfg(target_os = "linux")]
-const DEV_MARK: &str = "X-Zoms-Nexus-Dev=true";
+const DEV_MARK: &str = "X-Zoms-Modzilla-Dev=true";
 
 pub fn run() {
+    // Zom's Modzilla was Zom's Nexus: its folders move over before anything makes new ones.
+    legacy::move_early("com.zombeatz.zoms-modzilla");
     // Before the window opens, so the desktop finds the icon for it.
     #[cfg(target_os = "linux")]
     install_icon();
@@ -3907,7 +3937,7 @@ pub fn run() {
                     if !app.told_tray.swap(true, std::sync::atomic::Ordering::Relaxed) {
                         notify(
                             "Still downloading",
-                            if tray { "Zom's Nexus carries on in the background. Open it from its icon in the system tray." } else { "Zom's Nexus carries on, minimized. Close it again once the downloads finish." },
+                            if tray { "Zom's Modzilla carries on in the background. Open it from its icon in the system tray." } else { "Zom's Modzilla carries on, minimized. Close it again once the downloads finish." },
                         );
                     }
                 } else {
@@ -3936,10 +3966,12 @@ pub fn run() {
         .setup(move |app| {
             let config_dir = app.path().app_config_dir()?;
             let data_dir = app.path().app_data_dir()?;
+            // Zom's Modzilla was Zom's Nexus: its folders moved over in run(); tidy the rest once.
+            let renamed = fs::remove_file(data_dir.join(legacy::RENAMED)).is_ok();
             log::init(&data_dir);
             activity::init(&data_dir, app.handle().clone());
             gamepad::start(app.handle().clone());
-            log::info(&format!("Zom's Nexus {} starting", nexus::APP_VERSION));
+            log::info(&format!("Zom's Modzilla {} starting", nexus::APP_VERSION));
             let cache_dir = app.path().app_cache_dir()?;
             fs::create_dir_all(&config_dir)?;
             fs::create_dir_all(&data_dir)?;
@@ -3947,6 +3979,13 @@ pub fn run() {
             activity::set_off(&s.activity_off);
             library::set_roots(&s.game_libraries);
             let _ = fs::create_dir_all(s.library());
+            if renamed {
+                log::info("Moved Zom's Nexus' folders to Zom's Modzilla's");
+                let dirs: Vec<PathBuf> = library::list(&s.library()).into_iter().map(|m| PathBuf::from(m.folder)).collect();
+                let n = legacy::rename_marks(&dirs);
+                log::info(&format!("Renamed {n} marks in the library"));
+                rename_desktop_files(s.start_with_computer);
+            }
             let nexus = Nexus::new(settings::load_key(&config_dir));
             let settings = Arc::new(Mutex::new(s));
             // How to start this app, for the Steam Deck's quick access menu (the Decky plugin).
@@ -3978,12 +4017,12 @@ pub fn run() {
             }));
 
             // The tray icon: open, pause or resume, quit.
-            let open = MenuItem::with_id(app, "open", "Open Zom's Nexus", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open Zom's Modzilla", true, None::<&str>)?;
             let pause = MenuItem::with_id(app, "pause", "Pause all downloads", true, None::<&str>)?;
             let resume = MenuItem::with_id(app, "resume", "Resume all downloads", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &pause, &resume, &PredefinedMenuItem::separator(app)?, &quit])?;
-            let mut tray = TrayIconBuilder::with_id("main").tooltip("Zom's Nexus").menu(&menu).on_menu_event(|app, e| match e.id().as_ref() {
+            let mut tray = TrayIconBuilder::with_id("main").tooltip("Zom's Modzilla").menu(&menu).on_menu_event(|app, e| match e.id().as_ref() {
                 "open" => show_main(app),
                 "pause" => app.state::<App>().queue.pause_all(),
                 "resume" => app.state::<App>().queue.resume_all(),
@@ -4023,7 +4062,7 @@ pub fn run() {
                                 let _ = w.minimize();
                             }
                         }
-                        notify("Carrying on with your downloads", "Zom's Nexus is finishing them in the background.");
+                        notify("Carrying on with your downloads", "Zom's Modzilla is finishing them in the background.");
                     } else {
                         h.exit(0);
                     }
@@ -4257,5 +4296,5 @@ pub fn run() {
             tool_keep,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Zom's Nexus");
+        .expect("error while running Zom's Modzilla");
 }

@@ -1,5 +1,5 @@
-//! A plain-text log for troubleshooting: `<data>/zoms-nexus.log`, kept under about 2 MB (the
-//! older half moves to `zoms-nexus.old.log`). Errors from Nexus Mods, downloads, unpacking,
+//! A plain-text log for troubleshooting: `<data>/zoms-modzilla.log`, kept under about 2 MB (the
+//! older half moves to `zoms-modzilla.old.log`). Errors from Nexus Mods, downloads, unpacking,
 //! Play and the page itself go here. API keys and download keys are never written.
 
 use std::{
@@ -15,7 +15,7 @@ const MAX: u64 = 2 * 1024 * 1024;
 
 pub fn init(data: &std::path::Path) {
     let _ = fs::create_dir_all(data);
-    let _ = FILE.set(data.join("zoms-nexus.log"));
+    let _ = FILE.set(data.join("zoms-modzilla.log"));
 }
 
 pub fn path() -> Option<PathBuf> {
@@ -83,7 +83,7 @@ pub fn write(level: &str, msg: &str) {
     let Some(path) = FILE.get() else { return };
     let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     if fs::metadata(path).map(|m| m.len() > MAX).unwrap_or(false) {
-        let _ = fs::rename(path, path.with_file_name("zoms-nexus.old.log"));
+        let _ = fs::rename(path, path.with_file_name("zoms-modzilla.old.log"));
     }
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{} [{level}] {}", stamp(local(crate::queue::now())), scrub(msg).replace('\n', " | "));

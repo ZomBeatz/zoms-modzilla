@@ -1,12 +1,12 @@
-# Zom's Nexus on Flathub
+# Zom's Modzilla on Flathub
 
-The files Flathub needs: the build manifest (`com.zombeatz.zoms-nexus.yml`), the desktop file,
+The files Flathub needs: the build manifest (`com.zombeatz.zoms-modzilla.yml`), the desktop file,
 and the AppStream metainfo. Flathub builds from source without network access, so the Rust
 and npm dependencies are listed ahead of time.
 
 ## Before each release
 
-1. Tag the release in `ZomBeatz/zoms-nexus` (`v0.0.1`) and set the same `tag:` in the manifest.
+1. Tag the release in `ZomBeatz/zoms-modzilla` (`v0.0.1`) and set the same `tag:` in the manifest.
 2. Add the release to `<releases>` in the metainfo.
 3. Make the offline dependency lists (from [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)):
 
@@ -21,11 +21,11 @@ flatpak-node-generator npm ../../package-lock.json -o node-sources.json
 4. Check the metainfo, then build and try it:
 
 ```bash
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder appstream com.zombeatz.zoms-nexus.metainfo.xml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder appstream com.zombeatz.zoms-modzilla.metainfo.xml
 ```
 
 ```bash
-flatpak run org.flatpak.Builder --force-clean --user --install --install-deps-from=flathub build com.zombeatz.zoms-nexus.yml
+flatpak run org.flatpak.Builder --force-clean --user --install --install-deps-from=flathub build com.zombeatz.zoms-modzilla.yml
 ```
 
 ## Submitting

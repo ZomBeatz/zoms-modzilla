@@ -118,7 +118,7 @@ function store(key: string, value: unknown) {
 
 function lastPage(): Page {
   try {
-    const p = localStorage.getItem("zoms-nexus:page");
+    const p = localStorage.getItem("zoms-modzilla:page");
     if (p && PAGES.some((x) => x.id === p)) return p as Page;
   } catch {
     /* no storage */
@@ -133,8 +133,8 @@ export default function App({ first }: { first: Overview }) {
   const [page, setPage] = useState<Page>(first.hasKey ? lastPage() : "settings");
   const [toastMsg, setToast] = useState<ToastMsg | null>(null);
   const [adding, setAdding] = useState<string | false>(false);
-  const [game, setGameState] = useState<string | null>(() => stored<string | null>("zoms-nexus:game", null));
-  const [recent, setRecent] = useState<string[]>(() => stored<string[]>("zoms-nexus:recent-games", []));
+  const [game, setGameState] = useState<string | null>(() => stored<string | null>("zoms-modzilla:game", null));
+  const [recent, setRecent] = useState<string[]>(() => stored<string[]>("zoms-modzilla:recent-games", []));
   const [games, setGames] = useState<Game[]>([]);
   const [libraryVersion, setLibraryVersion] = useState(0);
   // While the account hasn't been checked yet, look every few seconds for the answer (reading
@@ -212,11 +212,11 @@ export default function App({ first }: { first: Overview }) {
   const toast = useCallback((text: string, action?: ToastMsg["action"]) => setToast({ id: Date.now(), text, action }), []);
   const setGame = useCallback((g: string | null) => {
     setGameState(g);
-    store("zoms-nexus:game", g);
+    store("zoms-modzilla:game", g);
     if (g)
       setRecent((r) => {
         const next = [g, ...r.filter((x) => x !== g)].slice(0, 20);
-        store("zoms-nexus:recent-games", next);
+        store("zoms-modzilla:recent-games", next);
         return next;
       });
   }, []);
@@ -239,7 +239,7 @@ export default function App({ first }: { first: Overview }) {
     setPage(p);
     if (g !== undefined) setGame(g);
     try {
-      localStorage.setItem("zoms-nexus:page", p);
+      localStorage.setItem("zoms-modzilla:page", p);
     } catch {
       /* no storage */
     }
@@ -280,7 +280,7 @@ export default function App({ first }: { first: Overview }) {
       // Every answer from Nexus Mods says how many requests are left; show the latest.
       on<Overview["limits"]>("limits:changed", (limits) => setOverview((o) => ({ ...o, limits }))),
       on<null>("queue:idle", () => toast("All downloads finished")),
-      on<null>("nexus:manual", () => toast("That was Manual download, which doesn't reach Zom's Nexus. Click Slow download instead.")),
+      on<null>("nexus:manual", () => toast("That was Manual download, which doesn't reach Zom's Modzilla. Click Slow download instead.")),
       on<null>("nexus:closed", () => {
         if (guidingRef.current) {
           guidingRef.current = false;
@@ -319,7 +319,7 @@ export default function App({ first }: { first: Overview }) {
   // downloads go into it (or whichever profile is set to take new downloads).
   useEffect(() => {
     if (!game || !games.some((g) => g.domain === game)) return;
-    const flag = `zoms-nexus:made-default:${game}`;
+    const flag = `zoms-modzilla:made-default:${game}`;
     if (stored(flag, false)) return;
     void api.profiles().then(async (ps) => {
       store(flag, true);
@@ -474,7 +474,7 @@ export default function App({ first }: { first: Overview }) {
                 // remembers (picked game, recent games, page, theme) is forgotten.
                 try {
                   Object.keys(localStorage)
-                    .filter((k) => k.startsWith("zoms-nexus:"))
+                    .filter((k) => k.startsWith("zoms-modzilla:"))
                     .forEach((k) => localStorage.removeItem(k));
                 } catch {
                   /* no storage */

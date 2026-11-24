@@ -1,4 +1,4 @@
-//! Backing up what Zom's Nexus knows (not the mods themselves): profiles with their rules,
+//! Backing up what Zom's Modzilla knows (not the mods themselves): profiles with their rules,
 //! add-ons and notes, your notes and tags on mods, restore points, time played, settings, and
 //! the curators' installer choices. One JSON file, to keep before reinstalling or to take to
 //! another computer. Never the API key, the download list, or what's put in games right now
@@ -45,10 +45,10 @@ pub fn make(config: &Path, data: &Path, now: u64) -> Backup {
             }
         }
     }
-    Backup { app: format!("Zom's Nexus {}", crate::nexus::APP_VERSION), made: now, files }
+    Backup { app: format!("Zom's Modzilla {}", crate::nexus::APP_VERSION), made: now, files }
 }
 
-/// Whether a name in a backup is one Zom's Nexus writes back (and so where).
+/// Whether a name in a backup is one Zom's Modzilla writes back (and so where).
 fn place(name: &str, config: &Path, data: &Path) -> Option<std::path::PathBuf> {
     if let Some(f) = name.strip_prefix("config/") {
         return CONFIG.contains(&f).then(|| config.join(f));
@@ -63,11 +63,11 @@ fn place(name: &str, config: &Path, data: &Path) -> Option<std::path::PathBuf> {
 
 pub fn read(path: &Path) -> Result<Backup, String> {
     if fs::metadata(path).map(|m| m.len()).unwrap_or(0) > MAX {
-        return Err("That file is too big to be a Zom's Nexus backup.".into());
+        return Err("That file is too big to be a Zom's Modzilla backup.".into());
     }
-    let b: Backup = serde_json::from_str(&fs::read_to_string(path).map_err(|e| format!("Couldn't read that file: {e}"))?).map_err(|_| "That isn't a Zom's Nexus backup.".to_string())?;
-    if !b.app.starts_with("Zom's Nexus") {
-        return Err("That isn't a Zom's Nexus backup.".into());
+    let b: Backup = serde_json::from_str(&fs::read_to_string(path).map_err(|e| format!("Couldn't read that file: {e}"))?).map_err(|_| "That isn't a Zom's Modzilla backup.".to_string())?;
+    if !b.app.starts_with("Zom's Modzilla") {
+        return Err("That isn't a Zom's Modzilla backup.".into());
     }
     Ok(b)
 }

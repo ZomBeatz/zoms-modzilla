@@ -299,7 +299,7 @@ export function Downloads(ctx: Ctx) {
             <p className="muted small" style={{ margin: "2px 0 0" }}>
               {guiding
                 ? `In the Nexus Mods window, click Slow download (not Manual download). When the file arrives here, the same window moves on to the next one, and it closes after the last.`
-                : "Free accounts download each file by clicking Slow download on its page, as Nexus Mods asks. Zom's Nexus shows the pages one after another in its own Nexus Mods window (sign in there the first time)."}
+                : "Free accounts download each file by clicking Slow download on its page, as Nexus Mods asks. Zom's Modzilla shows the pages one after another in its own Nexus Mods window (sign in there the first time)."}
             </p>
           </div>
           {guiding ? (

@@ -15,7 +15,7 @@ import { changes } from "./pages/RunPanel";
 import { when } from "./format";
 import { Dialog } from "./ui";
 
-const SEEN = "zoms-nexus:saves-seen";
+const SEEN = "zoms-modzilla:saves-seen";
 function seen(): string[] {
   try {
     return JSON.parse(localStorage.getItem(SEEN) ?? "[]") as string[];
@@ -31,7 +31,7 @@ function markSeen(id: string) {
   }
 }
 
-const CLOUD = "zoms-nexus:cloud-told";
+const CLOUD = "zoms-modzilla:cloud-told";
 function told(): string[] {
   try {
     return JSON.parse(localStorage.getItem(CLOUD) ?? "[]") as string[];
@@ -283,7 +283,7 @@ export function SavesGate({ games, toast, jobs }: { games: Game[]; toast: (t: st
           <CloudOff size={20} color="var(--zb-warn)" />
           <div className="grow">
             <p style={{ marginTop: 0 }}>
-              “{p.name}” keeps its own saves, but Steam Cloud can copy your usual {gameName} saves into them while the game runs. Zom's Nexus notices afterwards and offers to move them out, but it can't stop Steam doing it.
+              “{p.name}” keeps its own saves, but Steam Cloud can copy your usual {gameName} saves into them while the game runs. Zom's Modzilla notices afterwards and offers to move them out, but it can't stop Steam doing it.
             </p>
             <p className="small">
               To stop it: in Steam, right-click {gameName} › <b>Properties</b> › <b>General</b>, and turn off <b>Keep games saves in the Steam Cloud</b>. Your saves stay on this computer either way.
@@ -336,7 +336,7 @@ export function SavesGate({ games, toast, jobs }: { games: Game[]; toast: (t: st
         <div className="grow">
           {why === "switch" && live && (
             <p style={{ marginTop: 0 }}>
-              “{live.name}” is in the game now{live.ownSaves ? ", with its own saves" : ", with the usual saves"}. Playing “{p.name}” puts {own ? "its own saves" : "the usual saves"} in place instead. Nothing is deleted: each set waits in {game?.saveFolder ? "the save folder's .zoms-nexus-saves" : "its own folder"} until it's used again.
+              “{live.name}” is in the game now{live.ownSaves ? ", with its own saves" : ", with the usual saves"}. Playing “{p.name}” puts {own ? "its own saves" : "the usual saves"} in place instead. Nothing is deleted: each set waits in {game?.saveFolder ? "the save folder's .zoms-modzilla-saves" : "its own folder"} until it's used again.
             </p>
           )}
           {why === "first" && <p style={{ marginTop: 0 }}>The first time playing “{p.name}”. Which saves should the game see?</p>}
@@ -356,7 +356,7 @@ export function SavesGate({ games, toast, jobs }: { games: Game[]; toast: (t: st
           </label>
           {own && game?.steamCloud && (
             <p className="warn-text small">
-              Steam Cloud is on for {game.name}. It may copy your usual saves into this profile's folder (sometimes as empty folders). Zom's Nexus notices and offers to move them out; to stop it, turn Steam Cloud off in Steam › {game.name} › Properties › General.
+              Steam Cloud is on for {game.name}. It may copy your usual saves into this profile's folder (sometimes as empty folders). Zom's Modzilla notices and offers to move them out; to stop it, turn Steam Cloud off in Steam › {game.name} › Properties › General.
             </p>
           )}
         </div>

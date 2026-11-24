@@ -1,12 +1,12 @@
 [package]
-name = "zoms-nexus"
+name = "zoms-modzilla"
 version = "0.0.1"
-description = "Zom's Nexus: a Nexus Mods download manager for Linux"
+description = "Zom's Modzilla: a Nexus Mods download manager for Linux"
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "zoms_nexus_lib"
+name = "zoms_modzilla_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -2,7 +2,7 @@
 //! other profile shares the usual one.
 //!
 //! The game's save folder (the "live" one) always holds the saves of whoever is in the game now.
-//! The others wait beside it in `<save folder's parent>/.zoms-nexus-saves/<owner>/`, on the same
+//! The others wait beside it in `<save folder's parent>/.zoms-modzilla-saves/<owner>/`, on the same
 //! drive, so switching is a rename: instant, and nothing is ever copied or deleted. Something
 //! unexpected already at a destination is renamed aside (`… (kept 1700000000)`), never replaced.
 
@@ -13,7 +13,7 @@ use std::{
 
 /// The owner of the usual saves: every profile that doesn't keep its own.
 pub const SHARED: &str = "shared";
-const STASH: &str = ".zoms-nexus-saves";
+pub const STASH: &str = ".zoms-modzilla-saves";
 const OWNER_FILE: &str = "owner";
 
 /// Where a game keeps its saves, relative to its Proton prefix (`pfx:`) or the home folder
@@ -66,7 +66,7 @@ pub fn folder(game: &str, custom: Option<&str>, prefix: Option<&Path>, install: 
 }
 
 fn stash_dir(live: &Path) -> Option<PathBuf> {
-    Some(live.parent()?.join(STASH))
+    Some(crate::legacy::saves_stash(live.parent()?))
 }
 
 /// Whose saves are in the game's save folder now.
@@ -79,7 +79,7 @@ fn safe_owner(o: &str) -> Result<&str, String> {
     if !o.is_empty() && o.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         Ok(o)
     } else {
-        Err("That isn't a profile Zom's Nexus knows.".into())
+        Err("That isn't a profile Zom's Modzilla knows.".into())
     }
 }
 
@@ -159,7 +159,7 @@ pub fn copies(live: &Path) -> Vec<String> {
     out
 }
 
-/// Move those copies out of the profile's saves, into `.zoms-nexus-saves/copies <time>/`
+/// Move those copies out of the profile's saves, into `.zoms-modzilla-saves/copies <time>/`
 /// (nothing is deleted). Gives how many moved.
 pub fn move_copies(live: &Path) -> Result<usize, String> {
     let list = copies(live);
@@ -223,16 +223,16 @@ mod tests {
 
         // Something unexpected where p1's saves would go is kept, not replaced.
         switch(&live, SHARED).unwrap();
-        let stray = dir.path().join(".zoms-nexus-saves/shared");
+        let stray = dir.path().join(".zoms-modzilla-saves/shared");
         fs::create_dir_all(&stray).unwrap();
         fs::write(stray.join("stray.sav"), b"x").unwrap();
         switch(&live, "p1").unwrap();
-        let kept: Vec<_> = fs::read_dir(dir.path().join(".zoms-nexus-saves")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        let kept: Vec<_> = fs::read_dir(dir.path().join(".zoms-modzilla-saves")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         assert!(kept.iter().any(|n| n.starts_with("shared (kept ")), "{kept:?}");
         assert!(switch(&live, "../evil").is_err());
 
         // Copies of the shared saves in p1's folder (Steam Cloud) move out; p1's own stay.
-        let shared = dir.path().join(".zoms-nexus-saves/shared");
+        let shared = dir.path().join(".zoms-modzilla-saves/shared");
         fs::create_dir_all(shared.join("AutoSave-0")).unwrap();
         fs::write(shared.join("AutoSave-0/sav.dat"), b"same").unwrap();
         fs::create_dir_all(live.join("AutoSave-0")).unwrap();

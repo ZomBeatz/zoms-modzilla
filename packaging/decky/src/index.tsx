@@ -16,14 +16,14 @@ function Content() {
   const load = () => void profiles().then(setGames).catch(() => setGames([]));
   useEffect(load, []);
   const done = (msg: string, ok: string) => {
-    toaster.toast({ title: "Zom's Nexus", body: msg || ok });
+    toaster.toast({ title: "Zom's Modzilla", body: msg || ok });
     setTimeout(load, 4000);
   };
   if (!games) return <PanelSection title="Loading…" />;
   if (!games.length)
     return (
       <PanelSection>
-        <PanelSectionRow>No profiles yet. Make one in Zom's Nexus.</PanelSectionRow>
+        <PanelSectionRow>No profiles yet. Make one in Zom's Modzilla.</PanelSectionRow>
       </PanelSection>
     );
   return (
@@ -49,8 +49,8 @@ function Content() {
 }
 
 export default definePlugin(() => ({
-  name: "Zom's Nexus",
-  titleView: <div className={staticClasses.Title}>Zom's Nexus</div>,
+  name: "Zom's Modzilla",
+  titleView: <div className={staticClasses.Title}>Zom's Modzilla</div>,
   content: <Content />,
   icon: <FaCubes />,
 }));

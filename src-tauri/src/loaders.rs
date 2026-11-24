@@ -1,5 +1,5 @@
 //! Mod loaders, recognised by their files rather than by game: BepInEx, MelonLoader, UE4SS,
-//! REFramework, an ASI loader, script extenders, RED4ext and friends. A game Zom's Nexus has
+//! REFramework, an ASI loader, script extenders, RED4ext and friends. A game Zom's Modzilla has
 //! never seen still gets told "these mods need BepInEx, and it isn't there", and the loader's
 //! log is read for errors that name the profile's mods.
 //!

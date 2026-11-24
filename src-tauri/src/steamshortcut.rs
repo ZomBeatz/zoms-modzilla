@@ -1,8 +1,8 @@
-//! Zom's Nexus as a game in Steam (a "non-Steam game"), so a Steam Deck can open it from Game
+//! Zom's Modzilla as a game in Steam (a "non-Steam game"), so a Steam Deck can open it from Game
 //! Mode with the controller. Steam keeps these in `userdata/<you>/config/shortcuts.vdf`, a binary
 //! file it rewrites while it runs, so it's only changed while Steam is closed: the whole file is
-//! read, every other entry kept exactly as it was, Zom's Nexus's own entry added or updated, and
-//! the file before kept beside it (`shortcuts.vdf.zoms-nexus-backup`). Nothing else of Steam's is
+//! read, every other entry kept exactly as it was, Zom's Modzilla's own entry added or updated, and
+//! the file before kept beside it (`shortcuts.vdf.zoms-modzilla-backup`). Nothing else of Steam's is
 //! touched apart from the artwork for the entry (grid folder, files named by its number).
 
 use std::{
@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const NAME: &str = "Zom's Nexus";
+pub const NAME: &str = "Zom's Modzilla";
 
 /// A value in Valve's binary key-value format.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,7 +56,7 @@ fn map(b: &[u8], at: &mut usize) -> Result<Vec<(String, Node)>, String> {
                 *at += 8;
                 Node::Raw(kind, v)
             }
-            k => return Err(format!("Steam's shortcuts file has something Zom's Nexus doesn't know (kind {k}), so it's left alone.")),
+            k => return Err(format!("Steam's shortcuts file has something Zom's Modzilla doesn't know (kind {k}), so it's left alone.")),
         };
         out.push((key, v));
     }
@@ -128,7 +128,7 @@ fn get<'a>(m: &'a [(String, Node)], key: &str) -> Option<&'a Node> {
     m.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v)
 }
 
-/// Add Zom's Nexus to a shortcuts file (or update its entry). Gives the new file and the app number.
+/// Add Zom's Modzilla to a shortcuts file (or update its entry). Gives the new file and the app number.
 pub fn add(file: &[u8], exe: &str, start_dir: &str, icon: &str) -> Result<(Vec<u8>, u32, bool), String> {
     let mut top = parse(file)?;
     if !top.iter().any(|(k, _)| k.eq_ignore_ascii_case("shortcuts")) {
@@ -229,7 +229,7 @@ pub fn install(user: &Path, exe: &Path, art: &[(&str, &[u8])]) -> Result<bool, S
         return Err("Adding the entry would have lost others, so Steam's file is left as it was.".into());
     }
     if !old.is_empty() {
-        let keep = cfg.join("shortcuts.vdf.zoms-nexus-backup");
+        let keep = cfg.join("shortcuts.vdf.zoms-modzilla-backup");
         fs::write(&keep, &old).map_err(|e| format!("Couldn't keep a copy of Steam's file first: {e}"))?;
     }
     crate::settings::write_atomic(&file, &new)?;
@@ -250,7 +250,7 @@ mod tests {
         let other = vec![("shortcuts".to_string(), Node::Map(vec![("0".into(), Node::Map(vec![("appid".into(), Node::Int(123)), ("AppName".into(), Node::Str("Other".into())), ("Exe".into(), Node::Str("\"/g/other\"".into())), ("big".into(), Node::Raw(0x07, vec![1, 2, 3, 4, 5, 6, 7, 8])), ("tags".into(), Node::Map(vec![]))]))]))];
         let bytes = write(&other);
         assert_eq!(parse(&bytes).unwrap(), other, "reads back exactly");
-        let (new, id, was) = add(&bytes, "/apps/Zoms-Nexus.AppImage", "/apps", "/grid/x_icon.png").unwrap();
+        let (new, id, was) = add(&bytes, "/apps/Zoms-Modzilla.AppImage", "/apps", "/grid/x_icon.png").unwrap();
         assert!(!was);
         assert!(id & 0x8000_0000 != 0);
         let top = parse(&new).unwrap();
@@ -259,7 +259,7 @@ mod tests {
         assert_eq!(list[0], other[0].1.clone().as_map_first());
         assert_eq!(list[1].0, "1");
         // Again: updated, not doubled.
-        let (again, id2, was2) = add(&new, "/apps/Zoms-Nexus.AppImage", "/apps", "/grid/x_icon.png").unwrap();
+        let (again, id2, was2) = add(&new, "/apps/Zoms-Modzilla.AppImage", "/apps", "/grid/x_icon.png").unwrap();
         assert!(was2 && id2 == id);
         let Some(Node::Map(list)) = get(&parse(&again).unwrap(), "shortcuts").cloned() else { panic!() };
         assert_eq!(list.len(), 2);
@@ -284,10 +284,10 @@ mod tests {
         fs::create_dir_all(user.join("config")).unwrap();
         let other = write(&[("shortcuts".to_string(), Node::Map(vec![("0".into(), Node::Map(vec![("AppName".into(), Node::Str("Other".into()))]))]))]);
         fs::write(user.join("config/shortcuts.vdf"), &other).unwrap();
-        let exe = t.path().join("Zoms-Nexus.AppImage");
+        let exe = t.path().join("Zoms-Modzilla.AppImage");
         let was = install(&user, &exe, &[("p.png", b"art")]).unwrap();
         assert!(!was);
-        assert_eq!(fs::read(user.join("config/shortcuts.vdf.zoms-nexus-backup")).unwrap(), other, "the old file kept");
+        assert_eq!(fs::read(user.join("config/shortcuts.vdf.zoms-modzilla-backup")).unwrap(), other, "the old file kept");
         let id = app_id(&format!("\"{}\"", exe.display()), NAME);
         assert_eq!(fs::read(user.join(format!("config/grid/{id}p.png"))).unwrap(), b"art");
         let top = parse(&fs::read(user.join("config/shortcuts.vdf")).unwrap()).unwrap();

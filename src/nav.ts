@@ -18,7 +18,7 @@ export const takeWantedProfile = () => {
 };
 
 /** The profile last opened for each game, kept in this browser's storage. */
-const LAST = "zoms-nexus:last-profile";
+const LAST = "zoms-modzilla:last-profile";
 export function rememberedProfile(game: string): string | null {
   try {
     return (JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, string>)[game] ?? null;
@@ -37,7 +37,7 @@ export function rememberProfile(game: string, id: string) {
 }
 
 /** Mods switched off to test a crash, per profile, and when (so they can be switched back on later). */
-const TRIED = "zoms-nexus:crash-test";
+const TRIED = "zoms-modzilla:crash-test";
 type Tried = { ids: number[]; at: number };
 function allTried(): Record<string, Tried> {
   try {
@@ -63,7 +63,7 @@ export function setTriedOff(profile: string, ids: number[]) {
 }
 
 /** Profiles opened lately, across games (newest first, at most 5), for the game picker. */
-const RECENT = "zoms-nexus:recent-profiles";
+const RECENT = "zoms-modzilla:recent-profiles";
 export type RecentProfile = { id: string; name: string; game: string };
 export function recentProfiles(): RecentProfile[] {
   try {

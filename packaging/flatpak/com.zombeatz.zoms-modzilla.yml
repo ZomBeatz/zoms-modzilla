@@ -1,15 +1,15 @@
-# Flathub build of Zom's Nexus, from source. Before building or submitting, generate the
+# Flathub build of Zom's Modzilla, from source. Before building or submitting, generate the
 # offline dependency lists next to this file (see README.md):
 #   cargo-sources.json  (flatpak-cargo-generator.py ../../src-tauri/Cargo.lock)
 #   node-sources.json   (flatpak-node-generator npm ../../package-lock.json)
-id: com.zombeatz.zoms-nexus
+id: com.zombeatz.zoms-modzilla
 runtime: org.gnome.Platform
 runtime-version: '48'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
   - org.freedesktop.Sdk.Extension.node22
-command: zoms-nexus
+command: zoms-modzilla
 finish-args:
   - --share=ipc
   - --share=network
@@ -37,26 +37,26 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
   env:
-    CARGO_HOME: /run/build/zoms-nexus/cargo
+    CARGO_HOME: /run/build/zoms-modzilla/cargo
     CARGO_NET_OFFLINE: 'true'
-    npm_config_cache: /run/build/zoms-nexus/flatpak-node/npm-cache
+    npm_config_cache: /run/build/zoms-modzilla/flatpak-node/npm-cache
     npm_config_offline: 'true'
-    XDG_CACHE_HOME: /run/build/zoms-nexus/flatpak-node/cache
+    XDG_CACHE_HOME: /run/build/zoms-modzilla/flatpak-node/cache
 modules:
-  - name: zoms-nexus
+  - name: zoms-modzilla
     buildsystem: simple
     build-commands:
       - npm ci --offline
       - npm run tauri -- build --no-bundle
-      - install -Dm755 src-tauri/target/release/zoms-nexus /app/bin/zoms-nexus
-      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-nexus.desktop /app/share/applications/com.zombeatz.zoms-nexus.desktop
-      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-nexus.metainfo.xml /app/share/metainfo/com.zombeatz.zoms-nexus.metainfo.xml
-      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/com.zombeatz.zoms-nexus.png
-      - install -Dm644 src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/com.zombeatz.zoms-nexus.png
-      - install -Dm644 src-tauri/icons/512x512.png /app/share/icons/hicolor/512x512/apps/com.zombeatz.zoms-nexus.png
+      - install -Dm755 src-tauri/target/release/zoms-modzilla /app/bin/zoms-modzilla
+      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-modzilla.desktop /app/share/applications/com.zombeatz.zoms-modzilla.desktop
+      - install -Dm644 packaging/flatpak/com.zombeatz.zoms-modzilla.metainfo.xml /app/share/metainfo/com.zombeatz.zoms-modzilla.metainfo.xml
+      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/com.zombeatz.zoms-modzilla.png
+      - install -Dm644 src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/com.zombeatz.zoms-modzilla.png
+      - install -Dm644 src-tauri/icons/512x512.png /app/share/icons/hicolor/512x512/apps/com.zombeatz.zoms-modzilla.png
     sources:
       - type: git
-        url: https://github.com/ZomBeatz/zoms-nexus.git
+        url: https://github.com/ZomBeatz/zoms-modzilla.git
         tag: v0.0.1
       - cargo-sources.json
       - node-sources.json

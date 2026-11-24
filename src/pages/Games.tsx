@@ -140,12 +140,12 @@ export function GameDialog({ game, onClose, onSaved, focusModFolder }: { game?: 
   );
 }
 
-/** A folder for a game's mods on the game's own drive: beside its Steam library ("…/SteamLibrary/Zom's Nexus mods"), or next to the game's folder. */
+/** A folder for a game's mods on the game's own drive: beside its Steam library ("…/SteamLibrary/Zom's Modzilla mods"), or next to the game's folder. */
 export function sameDriveFolder(gamePath: string): string | null {
   const i = gamePath.indexOf("/steamapps/");
-  if (i > 0) return `${gamePath.slice(0, i)}/Zom's Nexus mods`;
+  if (i > 0) return `${gamePath.slice(0, i)}/Zom's Modzilla mods`;
   const parent = gamePath.replace(/\/+$/, "").split("/").slice(0, -1).join("/");
-  return parent ? `${parent}/Zom's Nexus mods` : null;
+  return parent ? `${parent}/Zom's Modzilla mods` : null;
 }
 
 export function Games({ toast, go, libraryVersion, reloadGames, gameStates, openAdd }: Ctx) {

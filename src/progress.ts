@@ -9,7 +9,7 @@ export function profileProgress(p: Profile, library: StoredMod[]): { have: numbe
 
 /** Updates a profile is waiting for: when each file finishes, it replaces the mod's old file
  * there. Kept in this browser's storage until then. */
-const PENDING = "zoms-nexus:profile-updates";
+const PENDING = "zoms-modzilla:profile-updates";
 type Pending = Record<string, { modId: number; fileId: number }[]>;
 export function pendingUpdates(): Pending {
   try {

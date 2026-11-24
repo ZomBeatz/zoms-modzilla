@@ -43,7 +43,7 @@ pub const KNOWN: &[(&str, &str, u32)] = &[
     ("citiesskylines", "Cities: Skylines", 255710),
     ("stalker2heartofchornobyl", "S.T.A.L.K.E.R. 2", 1643320),
     // Not here: games whose mods go in through their own tool (Terraria's tModLoader, Mass
-    // Effect Legendary Edition's ME3Tweaks), since Zom's Nexus can't put their mods in place.
+    // Effect Legendary Edition's ME3Tweaks), since Zom's Modzilla can't put their mods in place.
     // They can still be added by hand, for downloading.
     ("helldivers2", "Helldivers 2", 553850),
     ("finalfantasy7rebirth", "Final Fantasy VII Rebirth", 2909400),
@@ -118,7 +118,7 @@ pub struct SteamLibrary {
     pub path: String,
     /// How many games and tools Steam has installed there.
     pub installed: usize,
-    /// The ones Zom's Nexus knows are on Nexus Mods.
+    /// The ones Zom's Modzilla knows are on Nexus Mods.
     pub nexus_games: Vec<String>,
     pub free_space: Option<u64>,
     pub total_space: Option<u64>,
@@ -186,7 +186,7 @@ pub fn steam_library_dirs() -> Vec<PathBuf> {
     libs
 }
 
-/// A game Steam has installed (any game, not only ones Zom's Nexus knows).
+/// A game Steam has installed (any game, not only ones Zom's Modzilla knows).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SteamApp {

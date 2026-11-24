@@ -22,7 +22,7 @@ pub const GOOD: u64 = 5 * 60;
 pub struct Run {
     pub start: u64,
     pub secs: u64,
-    /// Stopped from Zom's Nexus: says nothing about the mods.
+    /// Stopped from Zom's Modzilla: says nothing about the mods.
     #[serde(default)]
     pub stopped: bool,
     /// (mod number, file number) of each switched-on mod.

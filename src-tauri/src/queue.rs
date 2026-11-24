@@ -769,7 +769,7 @@ impl Queue {
         let url = match self.nexus.download_url(&job.game, job.mod_id, job.file_id, job.key.as_deref(), job.expires).await {
             Ok(u) => u,
             Err(e) if e.status == 403 && job.key.is_none() => {
-                return Outcome::NeedsLink("Nexus Mods only lets Premium members download straight from an app. Click Mod manager download on the file's page and Zom's Nexus picks it up from there.".into())
+                return Outcome::NeedsLink("Nexus Mods only lets Premium members download straight from an app. Click Mod manager download on the file's page and Zom's Modzilla picks it up from there.".into())
             }
             Err(e) if matches!(e.status, 403 | 410) => return Outcome::NeedsLink(e.message),
             Err(e) if e.status == 0 || e.status == 429 || e.status >= 500 => return Outcome::Retry(e.message),

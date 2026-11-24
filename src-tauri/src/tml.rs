@@ -159,7 +159,7 @@ fn safe_names(names: &[String]) -> Result<Vec<String>, String> {
 pub fn set_enabled(mods_dir: &Path, names: &[String]) -> Result<(), String> {
     let names = safe_names(names)?;
     let file = mods_dir.join("enabled.json");
-    let keep = mods_dir.join("enabled.json.zoms-nexus-backup");
+    let keep = mods_dir.join("enabled.json.zoms-modzilla-backup");
     if file.is_file() && !keep.exists() {
         fs::copy(&file, &keep).map_err(|e| e.to_string())?;
     }
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(s.packs, vec![TmlPack { name: "Boss rush".into(), mods: vec!["CalamityMod".into(), "MagicStorage".into()] }]);
         set_enabled(&mods, &["MagicStorage".into()]).unwrap();
         assert_eq!(read_list(&mods.join("enabled.json")), vec!["MagicStorage"]);
-        assert_eq!(read_list(&mods.join("enabled.json.zoms-nexus-backup")), vec!["CalamityMod", "GoneMod"], "the first one is kept");
+        assert_eq!(read_list(&mods.join("enabled.json.zoms-modzilla-backup")), vec!["CalamityMod", "GoneMod"], "the first one is kept");
         save_pack(&mods, "Chill", &["MyOwn".into()]).unwrap();
         assert!(state_in(&mods, &w).packs.iter().any(|p| p.name == "Chill"));
         assert!(set_enabled(&mods, &["../x".into()]).is_err());

@@ -1,6 +1,6 @@
 //! Baldur's Gate 3: its .pak mods go in the game's own Mods folder in the Proton prefix
 //! (`AppData/Local/Larian Studios/Baldur's Gate 3/Mods`), and only the ones listed in
-//! `PlayerProfiles/Public/modsettings.lsx` load, in that order. Zom's Nexus puts a profile's
+//! `PlayerProfiles/Public/modsettings.lsx` load, in that order. Zom's Modzilla puts a profile's
 //! .pak files there (listed in `deployed/baldursgate3-paks.json`, so taking them out removes
 //! exactly those) and writes the list: the game's own base module first, anything other tools
 //! put there kept, then the profile's mods in load order. Each mod's details (UUID, folder,
@@ -124,7 +124,7 @@ pub fn meta_in_pak(path: &Path) -> Option<String> {
     None
 }
 
-/// What's placed: the .pak files Zom's Nexus put in the Mods folder, and the UUIDs it listed.
+/// What's placed: the .pak files Zom's Modzilla put in the Mods folder, and the UUIDs it listed.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Placed {
     pub files: Vec<String>,
@@ -220,7 +220,7 @@ pub fn paks_in(dir: &Path) -> Vec<(PathBuf, Option<Module>)> {
         .collect()
 }
 
-/// Take Zom's Nexus's .pak files out of the Mods folder and its mods off the list.
+/// Take Zom's Modzilla's .pak files out of the Mods folder and its mods off the list.
 pub fn clear(data: &Path, prefix: &Path) -> Result<(), String> {
     let was = placed(data);
     let dir = mods_dir(prefix);
@@ -277,7 +277,7 @@ pub fn apply(data: &Path, prefix: &Path, mod_dirs: &[PathBuf], copy: bool) -> Re
     let file = settings_file(prefix);
     let old = fs::read_to_string(&file).unwrap_or_default();
     // Keep the person's own list once, the first time.
-    let keep = file.with_extension("lsx.zoms-nexus-backup");
+    let keep = file.with_extension("lsx.zoms-modzilla-backup");
     if !old.is_empty() && !keep.exists() {
         let _ = fs::write(&keep, &old);
     }

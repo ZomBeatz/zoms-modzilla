@@ -1,4 +1,4 @@
-//! Is there a newer Zom's Nexus? Asks GitHub for the newest release of the app's repository, at
+//! Is there a newer Zom's Modzilla? Asks GitHub for the newest release of the app's repository, at
 //! most once a day, and only when the setting is on (it is at first). Installed from Flathub,
 //! Flathub does the updating, so the app doesn't ask. Nothing about you is sent: only the app's
 //! own name and version, as every request does.
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Duration};
 
 /// Where releases are published.
-pub const REPO: &str = "ZomBeatz/zoms-nexus";
+pub const REPO: &str = "ZomBeatz/zoms-modzilla";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +37,7 @@ pub fn from_github(v: &serde_json::Value) -> Option<Release> {
     let tag = v["tag_name"].as_str()?;
     Some(Release {
         version: tag.trim_start_matches(['v', 'V']).to_string(),
-        url: v["html_url"].as_str().filter(|u| u.starts_with("https://github.com/")).unwrap_or("https://github.com/ZomBeatz/zoms-nexus/releases").to_string(),
+        url: v["html_url"].as_str().filter(|u| u.starts_with("https://github.com/")).unwrap_or("https://github.com/ZomBeatz/zoms-modzilla/releases").to_string(),
         notes: v["body"].as_str().unwrap_or("").chars().take(4000).collect(),
         app_image: v["assets"].as_array().into_iter().flatten().filter_map(|a| a["browser_download_url"].as_str()).find(|u| u.ends_with(".AppImage") && u.starts_with("https://github.com/")).map(String::from),
     })
@@ -66,8 +66,8 @@ mod tests {
     #[test]
     fn compares_versions_and_reads_releases() {
         assert!(newer("v0.3.0", "0.2.9") && newer("1.0.0", "0.9.12") && !newer("0.2.0", "0.2.0") && !newer("v0.1.9", "0.2.0"));
-        let v = serde_json::json!({ "tag_name": "v0.3.0", "html_url": "https://github.com/ZomBeatz/zoms-nexus/releases/tag/v0.3.0", "body": "Notes", "draft": false, "prerelease": false,
-            "assets": [{ "browser_download_url": "https://github.com/ZomBeatz/zoms-nexus/releases/download/v0.3.0/Zoms-Nexus_0.3.0_amd64.AppImage" }, { "browser_download_url": "https://evil.example/x.AppImage" }] });
+        let v = serde_json::json!({ "tag_name": "v0.3.0", "html_url": "https://github.com/ZomBeatz/zoms-modzilla/releases/tag/v0.3.0", "body": "Notes", "draft": false, "prerelease": false,
+            "assets": [{ "browser_download_url": "https://github.com/ZomBeatz/zoms-modzilla/releases/download/v0.3.0/Zoms-Modzilla_0.3.0_amd64.AppImage" }, { "browser_download_url": "https://evil.example/x.AppImage" }] });
         let r = from_github(&v).unwrap();
         assert_eq!(r.version, "0.3.0");
         assert!(r.app_image.unwrap().starts_with("https://github.com/"));

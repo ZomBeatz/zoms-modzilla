@@ -1,4 +1,4 @@
-//! Settings in `settings.json` in the app's config folder (~/.config/com.zombeatz.zoms-nexus).
+//! Settings in `settings.json` in the app's config folder (~/.config/com.zombeatz.zoms-modzilla).
 //! The API key is kept apart in `api-key`, readable only by you (mode 600), so it never ends
 //! up in a copy of the settings.
 
@@ -95,7 +95,7 @@ pub struct Settings {
     /// Games whose mods are kept under another folder than the library: game → folder (which
     /// gets a `<game>` folder inside). Changed only by moving them (`library_move_game`).
     pub game_libraries: std::collections::BTreeMap<String, String>,
-    /// Ask GitHub once a day whether a newer Zom's Nexus is out (not in the Flatpak).
+    /// Ask GitHub once a day whether a newer Zom's Modzilla is out (not in the Flatpak).
     pub check_app_updates: bool,
     /// Snapshot a game's saves by itself before each Play (the last 10 are kept).
     pub snapshot_before_play: bool,
@@ -243,16 +243,19 @@ pub fn load_key(dir: &Path) -> Option<String> {
     keyring_get().or_else(|| fs::read_to_string(dir.join("api-key")).ok().map(|k| k.trim().to_string()).filter(|k| !k.is_empty()))
 }
 
-const SECRET: [&str; 4] = ["application", "zoms-nexus", "kind", "api-key"];
+const SECRET: [&str; 4] = ["application", "zoms-modzilla", "kind", "api-key"];
 
 /// The key from the desktop keyring, when one is there (secret-tool installed, key stored).
 fn keyring_get() -> Option<String> {
     if !crate::system::has_program("secret-tool") {
         return None;
     }
-    let out = std::process::Command::new("secret-tool").arg("lookup").args(SECRET).output().ok()?;
-    let k = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (out.status.success() && !k.is_empty()).then_some(k)
+    // Under the old name (Zom's Nexus) too.
+    [SECRET, crate::legacy::OLD_SECRET].iter().find_map(|attrs| {
+        let out = std::process::Command::new("secret-tool").arg("lookup").args(attrs).output().ok()?;
+        let k = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (out.status.success() && !k.is_empty()).then_some(k)
+    })
 }
 
 /// Put the key in the desktop keyring, or take it out (None).
@@ -269,7 +272,7 @@ pub fn keyring_set(key: Option<&str>) -> Result<(), String> {
         }
         Some(k) => {
             let mut child = Command::new("secret-tool")
-                .args(["store", "--label=Zom's Nexus: Nexus Mods API key"])
+                .args(["store", "--label=Zom's Modzilla: Nexus Mods API key"])
                 .args(SECRET)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())

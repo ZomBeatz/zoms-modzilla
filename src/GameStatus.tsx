@@ -80,7 +80,7 @@ export function GameStatus({ states, gameName, onOpen, onDismiss }: { states: Ga
             )}
             {asking === s.game && (
               <div className="game-status-ask">
-                <button className="btn sm" onClick={() => stop(s.game, false)} title="Zom's Nexus stops waiting for it; the game is left alone">
+                <button className="btn sm" onClick={() => stop(s.game, false)} title="Zom's Modzilla stops waiting for it; the game is left alone">
                   Stop waiting
                 </button>
                 <button className="btn danger solid sm" onClick={() => stop(s.game, true)} title="Closes everything running from the game's folder (forced after 8 seconds). Unsaved progress is lost.">

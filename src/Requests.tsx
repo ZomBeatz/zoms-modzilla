@@ -39,7 +39,7 @@ export function Requests({ limits }: { limits: Overview["limits"] }) {
       {open && (
         <Dialog title="Nexus Mods requests" onClose={() => setOpen(false)}>
           <p style={{ marginTop: 0 }}>
-            Zom's Nexus asks Nexus Mods for mod details, file lists and download links through their API, with your key. Nexus Mods gives each account a <b>daily allowance</b> of these requests. Once the day's are used up, a smaller <b>hourly allowance</b> applies until the day resets.
+            Zom's Modzilla asks Nexus Mods for mod details, file lists and download links through their API, with your key. Nexus Mods gives each account a <b>daily allowance</b> of these requests. Once the day's are used up, a smaller <b>hourly allowance</b> applies until the day resets.
           </p>
           <p className="muted small">
             Right now: {day != null ? `${day.toLocaleString()} left today` : "today's count isn't known yet"}

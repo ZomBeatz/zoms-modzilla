@@ -4,7 +4,7 @@ import { api, type SteamLibrary } from "../api";
 import { plural } from "../format";
 import { DiskBar } from "../ui";
 
-/** Where Zom's Nexus looks for games: each Steam library folder, and what it found there. */
+/** Where Zom's Modzilla looks for games: each Steam library folder, and what it found there. */
 export function SteamFolders() {
   const [libs, setLibs] = useState<SteamLibrary[] | null>(null);
   useEffect(() => {
@@ -23,7 +23,7 @@ export function SteamFolders() {
       ) : (
         <>
           <p className="muted small" style={{ marginTop: 0 }}>
-            Steam's library folders, read from its libraryfolders.vdf. A game shows up above when Steam has it installed in one of these and it's a game Zom's Nexus knows on Nexus Mods. Add a library folder in Steam (Settings &gt; Storage) and it's searched too.
+            Steam's library folders, read from its libraryfolders.vdf. A game shows up above when Steam has it installed in one of these and it's a game Zom's Modzilla knows on Nexus Mods. Add a library folder in Steam (Settings &gt; Storage) and it's searched too.
           </p>
           <div className="steam-libs">
             {libs.map((l) => (
@@ -34,7 +34,7 @@ export function SteamFolders() {
                   </div>
                   <div className="sub">
                     {plural(l.installed, "Steam install")}
-                    {l.nexusGames.length ? ` · on Nexus Mods: ${l.nexusGames.join(", ")}` : " · none Zom's Nexus knows yet"}
+                    {l.nexusGames.length ? ` · on Nexus Mods: ${l.nexusGames.join(", ")}` : " · none Zom's Modzilla knows yet"}
                   </div>
                 </div>
                 <DiskBar free={l.freeSpace} total={l.totalSpace} />

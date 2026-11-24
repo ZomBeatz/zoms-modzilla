@@ -49,7 +49,7 @@ export function HistoryDialog({ game, gameName, profiles, running, name, onClose
   return (
     <Dialog title={`${gameName}: restore points`} onClose={onClose} wide foot={<button className="btn" onClick={onClose}>Close</button>}>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Each time mods go into the game with a different list, Zom's Nexus notes it here (the newest 30). Going back puts that profile's list back the way it was and puts the mods in the game again. Mods since deleted from your library are left out.
+        Each time mods go into the game with a different list, Zom's Modzilla notes it here (the newest 30). Going back puts that profile's list back the way it was and puts the mods in the game again. Mods since deleted from your library are left out.
       </p>
       {error && <p className="err-text">{error}</p>}
       {points?.length === 0 && (
@@ -137,7 +137,7 @@ export function RuleDialog({ profile, modId, name, onClose, onSave }: { profile:
       }
     >
       <p className="muted small" style={{ marginTop: 0 }}>
-        A rule keeps this mod below the other one in the list, so it wins when both have the same file. Zom's Nexus keeps it whenever the order changes, moving as little as it can.
+        A rule keeps this mod below the other one in the list, so it wins when both have the same file. Zom's Modzilla keeps it whenever the order changes, moving as little as it can.
       </p>
       <label className="field">
         <span>After</span>

@@ -1233,7 +1233,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn download_now_steps_the_running_one_aside() {
         let (q, seen, _dir, settings) = setup(Mode::Sequential, 1).await;
-        settings.lock().unwrap().speed_limit = 300_000;
+        settings.lock().unwrap().speed_limit = 60_000; // Slow enough that the first file is still going when "now" comes, on slow machines too.
         let first = q.add("g", 1, 1, None, None, None);
         q.add("g", 1, 2, None, None, None);
         let third = q.add("g", 1, 3, None, None, None);

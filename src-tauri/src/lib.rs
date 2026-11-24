@@ -3856,13 +3856,6 @@ fn remote_start(handle: AppHandle) -> Res<RemotePage> {
             let _ = h.emit("remote:link", l);
             "Sent: look at Zom's Modzilla to carry on.".into()
         }
-        remote::Sent::Key(k) => match tauri::async_runtime::block_on(use_key(&h.state::<App>(), k)) {
-            Ok(o) => {
-                let _ = h.emit("account:changed", ());
-                format!("Signed in{}.", o.user.map(|u| format!(" as {}", u.name)).unwrap_or_default())
-            }
-            Err(e) => e,
-        },
     })?;
     log::info("Send from your phone: the page is open on the home network");
     let (width, cells) = remote::qr(&url)?;

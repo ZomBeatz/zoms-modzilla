@@ -31,7 +31,9 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
           <li>
             In Desktop Mode, open Zom's Modzilla once and press <b>Add to Steam</b> (Settings › Steam Deck). From then on it's in your library in Game Mode, with its artwork.
           </li>
-          <li>Sign in: <b>Sign in with your phone</b> scans a QR code, so you paste your API key on your phone instead of typing it.</li>
+          <li>
+            Sign in: paste your API key from nexusmods.com › Settings › API keys in <b>Settings</b>. On a Deck, the easiest way is in Desktop Mode, with copy and paste.
+          </li>
           <li>Pick a game, get mods (Browse, or a collection), and make a profile. <b>Play</b> puts the profile's mods in and starts the game.</li>
           <li>Games on the SD card: keep their mods on the card too (Games › Keep its mods on its drive), so they're linked, not copied.</li>
         </ol>
@@ -66,7 +68,7 @@ export const GUIDES: { id: string; title: string; body: (go: Ctx["go"]) => React
     body: () => (
       <>
         <p>
-          Choosing a text box with <b>A</b>, or tapping it, opens Steam's keyboard (<b>STEAM + X</b> opens it any time). For anything long, like your API key or a download link, use your phone:
+          Choosing a text box with <b>A</b>, or tapping it, opens Steam's keyboard (<b>STEAM + X</b> opens it any time). For a long download link, use your phone:
         </p>
         <PhoneSendButton />
       </>

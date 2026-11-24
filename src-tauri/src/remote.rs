@@ -1,10 +1,11 @@
 //! Send from your phone: a small page on this computer, reached on the home network by
-//! scanning a QR code, for pasting what's awkward to type on a Steam Deck: your Nexus Mods API
-//! key, a Mod manager download link (nxm://, which carries the key and expiry Nexus Mods made
-//! when you clicked, so free accounts still click each file), or a mod or collection address.
+//! scanning a QR code, for pasting what's awkward to type on a Steam Deck: a Mod manager
+//! download link (nxm://, which carries the short-lived key and expiry Nexus Mods made when you
+//! clicked, so free accounts still click each file), or a mod or collection address. Never the
+//! API key: the page is plain http, fine for links that expire, not for a key that doesn't.
 //!
 //! It only listens while its dialog is open (and 15 minutes at most), every request needs the
-//! one-time code in the QR code, and it only takes those three things.
+//! one-time code in the QR code, and it only takes links.
 
 use std::{
     io::{Read, Write},
@@ -21,7 +22,6 @@ pub const OPEN_FOR: Duration = Duration::from_secs(15 * 60);
 /// What came in from the phone.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Sent {
-    Key(String),
     Link(String),
 }
 
@@ -122,7 +122,6 @@ pub fn page(token: &str, said: &str) -> String {
 <style>body{{font:16px system-ui,sans-serif;background:#0d0d12;color:#ececf1;margin:0;padding:20px;max-width:560px}}h1{{font-size:20px}}p{{color:#a7a7b5}}label{{display:block;margin:18px 0 6px;font-weight:600}}textarea,input{{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #33333f;background:#17171f;color:inherit;font:inherit}}button{{margin-top:10px;padding:12px 18px;border:0;border-radius:10px;background:#7c5cff;color:#fff;font:inherit;font-weight:600}}.said{{padding:12px;border-radius:10px;background:#1d2a1f;color:#b9f5c4}}a{{color:#b6a6ff}}</style></head><body>
 <h1>Send to Zom's Modzilla</h1>{said_block}
 <form method="post" action="/link?t={token}"><label for="l">A link</label><p>A <b>Mod manager download</b> link (long-press the button on nexusmods.com, copy the link), a mod page, or a collection.</p><textarea id="l" name="link" rows="3" placeholder="nxm://… or https://www.nexusmods.com/…"></textarea><button>Send</button></form>
-<form method="post" action="/key?t={token}"><label for="k">Your API key</label><p>Copy it from <a href="https://next.nexusmods.com/settings/api-keys" rel="noreferrer">nexusmods.com › Settings › API keys</a>.</p><input id="k" name="key" type="password" autocomplete="off"><button>Sign in</button></form>
 <p>This page works only while Send from your phone is open in Zom's Modzilla. Use it on your home network.</p></body></html>"#,
         said_block = if said.is_empty() { String::new() } else { format!(r#"<p class="said">{said}</p>"#) }
     )
@@ -159,10 +158,6 @@ pub fn start(got: impl Fn(Sent) -> String + Send + 'static) -> Result<String, St
                 ("POST", "/link") => match form_value(&body, "link").map(|v| v.trim().to_string()) {
                     Some(v) if link_ok(&v) => got(Sent::Link(v)),
                     _ => "That isn't a Nexus Mods link.".into(),
-                },
-                ("POST", "/key") => match form_value(&body, "key").map(|v| v.trim().to_string()) {
-                    Some(v) if !v.is_empty() && v.len() < 512 && v.chars().all(|c| c.is_ascii_graphic()) => got(Sent::Key(v)),
-                    _ => "Paste the whole key.".into(),
                 },
                 _ => {
                     reply(&mut s, "404 Not Found", "text/plain", "Not here.");

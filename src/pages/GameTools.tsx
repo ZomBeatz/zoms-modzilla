@@ -19,6 +19,20 @@ const NEXUS_LOADERS: Record<string, [number, string, string][]> = {
   fallout4: [[42147, "Fallout 4 Script Extender (F4SE)", "Needed by most big mods"]],
 };
 
+/** The browser demo's made-up games and their made-up loaders (demo.ts has them in its catalog). */
+const DEMO_LOADERS: Record<string, [number, string, string][]> = {
+  frostrim: [
+    [9010, "FKSE: Frostrim Script Extender", "Needed by most big mods"],
+    [9011, "Address Library for FKSE Plugins", "Needed by most FKSE plugins"],
+  ],
+  cyberhunk2088: [
+    [9210, "Hunk Engine Tweaks", "Lua mods and the in-game mod menu"],
+    [9211, "hunkscript", "Script mods"],
+    [9212, "HUNK4ext", "Plugin mods"],
+  ],
+  stardudevalley: [[9110, "SDAPI", "Loads Stardude Valley mods"]],
+};
+
 const viaName = (v: PrefixStatus["via"]) => (v === "protontricks" ? "Protontricks" : v === "protontricksFlatpak" ? "Protontricks (Flatpak)" : v === "winetricks" ? "winetricks" : "");
 
 /** Game tools: Steam starting the script extender, what the Proton prefix has, modding tools
@@ -47,7 +61,7 @@ export function GameTools({ game, onClose, toast, openAdd }: { game: Game; onClo
       setBusy("");
     }
   };
-  const nexus = NEXUS_LOADERS[game.domain] ?? [];
+  const nexus = (isDesktop ? NEXUS_LOADERS : { ...NEXUS_LOADERS, ...DEMO_LOADERS })[game.domain] ?? [];
   const proton = !!game.protonPrefix;
   return (
     <Dialog title={`${game.name}: game tools`} onClose={onClose} wide foot={<button className="btn" onClick={onClose}>Close</button>}>

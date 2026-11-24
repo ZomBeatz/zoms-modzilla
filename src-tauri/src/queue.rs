@@ -987,6 +987,9 @@ mod tests {
         peak: Arc<AtomicUsize>,
         order: Arc<Mutex<Vec<u64>>>,
         ranges: Arc<Mutex<Vec<u64>>>,
+        /// Files held after their first piece until taken out of here, so a test can act while
+        /// one is surely mid-download, however fast or slow the machine.
+        hold: Arc<Mutex<std::collections::HashSet<u64>>>,
     }
 
     async fn serve(seen: Seen) -> String {
@@ -1040,10 +1043,13 @@ mod tests {
                             };
                             let _ = s.write_all(head.as_bytes()).await;
                             let body: Vec<u8> = (from..SIZE).map(byte).collect();
-                            for piece in body.chunks(SIZE / 10) {
+                            for (i, piece) in body.chunks(SIZE / 10).enumerate() {
                                 tokio::time::sleep(Duration::from_millis(40)).await;
                                 if s.write_all(piece).await.is_err() {
                                     break;
+                                }
+                                while i == 0 && seen.hold.lock().unwrap().contains(&id) {
+                                    tokio::time::sleep(Duration::from_millis(10)).await;
                                 }
                             }
                             seen.active.fetch_sub(1, Ordering::SeqCst);
@@ -1072,6 +1078,22 @@ mod tests {
         let q = Queue::new(None, dir.path().to_path_buf(), settings.clone(), nexus);
         q.start();
         (q, seen, dir, settings)
+    }
+
+    /// Hold these files mid-download until `active` of them are going at once, then let them go:
+    /// how many download together is then down to the queue, never to the machine's speed.
+    async fn hold_until_active(seen: &Seen, files: impl IntoIterator<Item = u64>, active: usize) {
+        seen.hold.lock().unwrap().extend(files);
+        for _ in 0..400 {
+            if seen.active.load(Ordering::SeqCst) >= active {
+                // A moment more, to see that no more than that start.
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                seen.hold.lock().unwrap().clear();
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        panic!("never had {active} downloading at once (peak {})", seen.peak.load(Ordering::SeqCst));
     }
 
     async fn wait_until(q: &Queue, what: &str, ok: impl Fn(&[Job]) -> bool) {
@@ -1121,9 +1143,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn concurrent_runs_up_to_the_limit() {
         let (q, seen, _dir, _) = setup(Mode::Concurrent, 3).await;
+        seen.hold.lock().unwrap().extend(1..=5);
         for f in 1..=5 {
             q.add("g", 1, f, None, None, None);
         }
+        hold_until_active(&seen, 1..=5, 3).await;
         wait_until(&q, "all done", all_done).await;
         assert_eq!(seen.peak.load(Ordering::SeqCst), 3);
         // Files of one mod finishing together are all noted in its nexus.json.
@@ -1133,6 +1157,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn switching_mode_takes_effect_for_the_next_file() {
         let (q, seen, _dir, settings) = setup(Mode::Sequential, 4).await;
+        seen.hold.lock().unwrap().extend(1..=6);
         for f in 1..=6 {
             q.add("g", 1, f, None, None, None);
         }
@@ -1140,6 +1165,7 @@ mod tests {
         assert_eq!(seen.peak.load(Ordering::SeqCst), 1);
         settings.lock().unwrap().mode = Mode::Concurrent;
         q.poke();
+        hold_until_active(&seen, 1..=6, 4).await;
         wait_until(&q, "all done", all_done).await;
         assert_eq!(seen.peak.load(Ordering::SeqCst), 4);
     }
@@ -1147,13 +1173,15 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn pause_and_resume_picks_up_where_it_stopped() {
         let (q, seen, dir, _) = setup(Mode::Sequential, 1).await;
+        // Held after its first piece, so it's surely part-way when paused.
+        seen.hold.lock().unwrap().insert(9);
         let job = q.add("g", 1, 9, None, None, None);
-        wait_until(&q, "downloading", |j| j[0].status == Status::Downloading).await;
-        tokio::time::sleep(Duration::from_millis(150)).await;
+        let part = q.part_path(&job.id);
+        wait_until(&q, "part of it on disk", |_| std::fs::metadata(&part).map(|m| m.len() > 0).unwrap_or(false)).await;
         q.pause(&job.id);
         assert_eq!(q.list()[0].status, Status::Paused);
+        seen.hold.lock().unwrap().clear();
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let part = q.part_path(&job.id);
         let had = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
         assert!(had > 0 && (had as usize) < SIZE, "partial file should be kept, had {had}");
         q.resume(&job.id);
@@ -1174,9 +1202,11 @@ mod tests {
         wait_until(&q, "all done", all_done).await;
         assert_eq!(seen.peak.load(Ordering::SeqCst), 1, "free account: one at a time");
         q.set_premium(true);
+        seen.hold.lock().unwrap().extend(4..=6);
         for f in 4..=6 {
             q.add("g", 1, f, None, None, None);
         }
+        hold_until_active(&seen, 4..=6, 3).await;
         wait_until(&q, "all done", all_done).await;
         assert_eq!(seen.peak.load(Ordering::SeqCst), 3, "Premium: several at once");
     }
@@ -1233,13 +1263,17 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn download_now_steps_the_running_one_aside() {
-        let (q, seen, _dir, settings) = setup(Mode::Sequential, 1).await;
-        settings.lock().unwrap().speed_limit = 60_000; // Slow enough that the first file is still going when "now" comes, on slow machines too.
+        let (q, seen, _dir, _settings) = setup(Mode::Sequential, 1).await;
+        // The first file stops after its first piece until "now" has come.
+        seen.hold.lock().unwrap().insert(1);
         let first = q.add("g", 1, 1, None, None, None);
         q.add("g", 1, 2, None, None, None);
         let third = q.add("g", 1, 3, None, None, None);
-        wait_until(&q, "the first one downloading", |l: &[Job]| l.iter().any(|j| j.id == first.id && j.received > 0)).await;
+        // Bytes of it on disk: it's surely mid-download (held there by the stand-in).
+        let part = q.part_path(&first.id);
+        wait_until(&q, "the first one downloading", |_: &[Job]| std::fs::metadata(&part).map(|m| m.len() > 0).unwrap_or(false)).await;
         q.now(&third.id);
+        seen.hold.lock().unwrap().clear();
         // Still one at a time, right after the switch.
         assert!(q.list().iter().filter(|j| j.status.running()).count() <= 1);
         assert_eq!(q.list()[0].id, third.id);

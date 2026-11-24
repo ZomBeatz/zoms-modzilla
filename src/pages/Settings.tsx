@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { PhoneSendButton } from "../PhoneSend";
 import { AlertCircle, Check, CheckCircle2, Copy, FileDown, FileUp, FolderOpen, ScrollText, ExternalLink, Eye, EyeOff, KeyRound, Link2, MonitorCheck } from "lucide-react";
 import { getDevice, readUi, saveUi } from "../deck";
 import { AddToSteam } from "./AddToSteam";
@@ -130,8 +129,6 @@ function ApiKey({ overview, setOverview, toast }: Ctx) {
           >
             Open the API keys page <ExternalLink size={11} />
           </a>
-          {" · "}
-          Hard to type here? <PhoneSendButton className="btn sm ghost" label="Paste it on your phone" />
         </span>
         {error && <span className="err">{error}</span>}
       </label>

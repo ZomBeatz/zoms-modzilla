@@ -1,7 +1,6 @@
 // The first time Zom's Modzilla opens on a Steam Deck: everything that makes it feel at home there,
 // in one place. Shown once (Settings › Steam Deck can show it again).
 
-import { PhoneSendButton } from "./PhoneSend";
 import { useEffect, useState } from "react";
 import { Check, Gamepad2 } from "lucide-react";
 import { api, on, type Game } from "./api";
@@ -113,9 +112,8 @@ export function DeckSetup({ games, hasKey, toast, goSettings, reloadGames }: { g
             </span>
           ) : (
             <>
-              <PhoneSendButton className="btn sm primary" label="Sign in with your phone" />{" "}
-              <button className="btn sm ghost" onClick={() => { setOpen(false); goSettings(); }}>
-                Type it in Settings
+              <button className="btn sm primary" onClick={() => { setOpen(false); goSettings(); }}>
+                Sign in
               </button>
             </>
           )}

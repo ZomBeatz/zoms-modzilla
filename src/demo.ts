@@ -16,7 +16,7 @@ export function on(event: string, handler: (p: unknown) => void) {
 const now = () => Math.floor(Date.now() / 1000);
 
 // Placeholder pictures for the demo: drawn here, so no real game or mod art is used.
-const HUES: Record<string, number> = { cyberhunk2088: 52, frostrim: 210, stardudevalley: 95 };
+const HUES: Record<string, number> = { cyberhunk2088: 52, frostrim: 210, stardudevalley: 95, crittertamers: 160 };
 const hue = (k: string) => HUES[k] ?? [...k].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 7);
 const svg = (w: number, h: number, body: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`)}`;
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -214,6 +214,8 @@ const games: Game[] = [
   { domain: "cyberhunk2088", name: "Cyberhunk 2088", path: "/home/alex/.local/share/Steam/steamapps/common/Cyberhunk 2088", source: "steam", steamAppId: 9900001, protonPrefix: "/home/alex/.local/share/Steam/steamapps/compatdata/9900001/pfx", modFolder: "", freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
   { domain: "frostrim", name: "Frostrim: The Elder Moods", path: "/mnt/games/SteamLibrary/steamapps/common/Frostrim: The Elder Moods", source: "steam", steamAppId: 9900002, protonPrefix: "/mnt/games/SteamLibrary/steamapps/compatdata/9900002/pfx", modFolder: "Data", activeProfile: "Winter evenings", saveFolder: "/mnt/games/SteamLibrary/steamapps/compatdata/9900002/pfx/drive_c/users/steamuser/Documents/My Games/Frostrim/Saves", freeSpace: 911_000_000_000, totalSpace: 2_000_000_000_000 },
   { domain: "stardudevalley", name: "Stardude Valley", path: "/home/alex/Games/stardude", source: "added", modFolder: "Mods", launch: "./StardudeLoader", freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
+  // An Unreal Engine game, for UE4SS and its Lua mods.
+  { domain: "crittertamers", name: "Critter Tamers", path: "/home/alex/.local/share/Steam/steamapps/common/Critter Tamers", source: "steam", steamAppId: 9900003, protonPrefix: "/home/alex/.local/share/Steam/steamapps/compatdata/9900003/pfx", modFolder: "", proton: "GE-Proton9-20", freeSpace: 182_000_000_000, totalSpace: 1_000_000_000_000 },
 ];
 
 const catalog: { mod: ModInfo; files: FileInfo[] }[] = [
@@ -228,6 +230,14 @@ const catalog: { mod: ModInfo; files: FileInfo[] }[] = [
   ]),
   mod("stardudevalley", 9101, "Bigger Barn Doors", "Alex", "Wider barn and coop doors, so animals stop getting stuck.", [["Bigger Barn Doors", "MAIN", 0.4]]),
   mod("cyberhunk2088", 9201, "Neon Sign Refresh", "Maya", "Sharper neon signs across the city.", [["Neon Sign Refresh", "MAIN", 320]]),
+  // Made-up loaders, standing in for the real ones (SKSE, Cyber Engine Tweaks, SMAPI, UE4SS mods…).
+  mod("frostrim", 9010, "FKSE: Frostrim Script Extender", "Team FKSE", "Lets mods run their own scripts. Most big mods need it.", [["FKSE", "MAIN", 0.8]]),
+  mod("frostrim", 9011, "Address Library for FKSE Plugins", "Meh", "One file every FKSE plugin needs, so they work after game updates.", [["All in one", "MAIN", 2.1]]),
+  mod("cyberhunk2088", 9210, "Hunk Engine Tweaks", "Nova", "Lua mods and the in-game mod menu.", [["Hunk Engine Tweaks", "MAIN", 14]]),
+  mod("cyberhunk2088", 9211, "hunkscript", "Kai", "Lets script mods change the game's own code.", [["hunkscript", "MAIN", 1.2]]),
+  mod("cyberhunk2088", 9212, "HUNK4ext", "Nova", "Loads plugin mods. Needs Visual C++ in the Proton prefix.", [["HUNK4ext", "MAIN", 0.6]]),
+  mod("stardudevalley", 9110, "SDAPI: the Stardude modding API", "Pathos", "Loads Stardude Valley mods and checks them for updates.", [["SDAPI installer", "MAIN", 6]]),
+  mod("crittertamers", 9301, "Bigger Critter Bags", "Robin", "Carry twice as many critters. A UE4SS Lua mod.", [["Bigger Critter Bags", "MAIN", 0.1]]),
 ];
 
 function mod(game: string, id: number, name: string, author: string, summary: string, files: [string, string, number][]) {
@@ -250,6 +260,9 @@ function mod(game: string, id: number, name: string, author: string, summary: st
 let library: StoredMod[] = [
   stored(catalog[1], [0], 2),
   stored(catalog[3], [0], 5),
+  stored(catalog.find((c) => c.mod.modId === 9201)!, [0], 6),
+  stored(catalog.find((c) => c.mod.modId === 9210)!, [0], 6),
+  stored(catalog.find((c) => c.mod.modId === 9301)!, [0], 1),
 ];
 
 function stored(c: (typeof catalog)[number], idx: number[], daysAgo: number): StoredMod {
@@ -379,6 +392,8 @@ const activity: { id: number; at: number; kind: string; title: string; detail?: 
 let profiles: Profile[] = [
   { id: "p1", name: "Winter evenings", game: "frostrim", mods: [9001, 9002, 9003].map((m) => ({ modId: m, fileId: m * 10, enabled: true })) },
   { id: "p2", name: "Farm life", game: "stardudevalley", mods: [{ modId: 9101, fileId: 91010, enabled: true }] },
+  { id: "p4", name: "Neon nights", game: "cyberhunk2088", mods: [9201, 9210].map((m) => ({ modId: m, fileId: m * 10, enabled: true })) },
+  { id: "p5", name: "Critter run", game: "crittertamers", mods: [{ modId: 9301, fileId: 93010, enabled: true }] },
   {
     id: "p3",
     name: "Snowy North (revision 4)",
@@ -711,6 +726,7 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
           { domain: "cyberhunk2088", name: "Cyberhunk 2088", mods: 18400 },
           { domain: "frostrim", name: "Frostrim: The Elder Moods", mods: 102300 },
           { domain: "stardudevalley", name: "Stardude Valley", mods: 21900 },
+          { domain: "crittertamers", name: "Critter Tamers", mods: 3400 },
           { domain: "dungeondelvers", name: "Dungeon Delvers", mods: 2310 },
           { domain: "skyharbor", name: "Sky Harbor Tycoon", mods: 480 },
           { domain: "mechmayhem", name: "Mech Mayhem", mods: 95 },
@@ -956,7 +972,18 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
       return;
     case "profile_check": {
       // The made-up problems for the first profile; the others come out clean.
-      const r: CheckReport = a.id === "p1" ? { ...demoCheck, at: now(), loaders: [], loadersMissing: [{ loader: "SKSE", mods: ["Quiet Footsteps"] }], misplaced: [{ modId: 9003, modName: "Pine Forest Textures", extra: "Pine Forest Textures v2", lands: "Data/Pine Forest Textures v2/textures", should: "Data/textures" }] } : { ...demoCheck, conflicts: [], plugins: [], needs: [], compat: [], programs: [], at: now() };
+      const r: CheckReport = a.id === "p1" ? { ...demoCheck, at: now(), loaders: [], loadersMissing: [{ loader: "FKSE", mods: ["Quiet Footsteps"] }], misplaced: [{ modId: 9003, modName: "Pine Forest Textures", extra: "Pine Forest Textures v2", lands: "Data/Pine Forest Textures v2/textures", should: "Data/textures" }] } : { ...demoCheck, conflicts: [], plugins: [], needs: [], compat: [], programs: [], at: now() };
+      // Only Frostrim has plugins.
+      if (profiles.find((x) => x.id === a.id)?.game !== "frostrim") r.loadOrder = [];
+      // Loaders that come as a DLL need a Steam launch option under Proton.
+      if (a.id === "p4") {
+        r.loadersMissing = [{ loader: "HUNK4ext", mods: ["Hunk Engine Tweaks"] }];
+        r.launchFix = { missing: ["version"], current: "", suggested: 'WINEDLLOVERRIDES="version=n,b" %command%' };
+      }
+      if (a.id === "p5") {
+        r.loadersMissing = [{ loader: "UE4SS", mods: ["Bigger Critter Bags"] }];
+        r.launchFix = { missing: ["dwmapi"], current: "", suggested: 'WINEDLLOVERRIDES="dwmapi=n,b" %command%' };
+      }
       // The farm profile's last run had SMAPI skip mods.
       if (a.id === "p2")
         r.gameLog = {
@@ -1059,10 +1086,23 @@ export async function call(cmd: string, a: Record<string, unknown> = {}): Promis
     case "tool_keep":
       return { game: a.game, modId: 1_000_000_000_999, name: a.name || "Tool output", local: true, files: [], folder: "" };
     case "loader_offers":
-      return a.game === "cyberhunk2088" ? [{ id: "reshade-dxgi", name: "ReShade (DirectX 10–12)", what: "Post-processing shaders: colour, sharpening, ambient occlusion.", dll: "dxgi" }] : [{ id: "ue4ss", name: "UE4SS", what: "Lua and Blueprint mods for Unreal Engine games.", dll: "dwmapi" }, { id: "reshade-dxgi", name: "ReShade (DirectX 10–12)", what: "Post-processing shaders.", dll: "dxgi" }];
-    case "loader_install":
+    {
+      const reshade = [
+        { id: "reshade-dxgi", name: "ReShade (DirectX 10–12)", what: "Post-processing shaders: colour, sharpening, ambient occlusion.", dll: "dxgi" },
+        { id: "reshade-d3d9", name: "ReShade (DirectX 9)", what: "ReShade for older DirectX 9 games.", dll: "d3d9" },
+      ];
+      if (a.game === "crittertamers") return [{ id: "ue4ss", name: "UE4SS", what: "Lua and Blueprint mods for Unreal Engine games, and the mods that need it.", dll: "dwmapi" }, ...reshade];
+      return a.game === "stardudevalley" ? [] : reshade;
+    }
+    case "loader_install": {
       await new Promise((r) => setTimeout(r, 1200));
-      return { game: a.game, modId: 1_000_000_000_998, name: a.id === "ue4ss" ? "UE4SS v3.0.1" : "ReShade (6.4.1)", local: true, files: [], folder: "" };
+      const name = a.id === "ue4ss" ? "UE4SS v3.0.1" : `ReShade (6.4.1, ${a.id === "reshade-d3d9" ? "DirectX 9" : "DirectX 10–12"})`;
+      const id = 1_000_000_000_000 + library.length + 900;
+      const m: StoredMod = { game: String(a.game), modId: id, name, author: null, version: null, summary: "Made on this computer, kept as a mod of your own.", pictureUrl: null, local: true, folder: `${settings.libraryDir}/${a.game}/${id} - ${name}`, files: [{ fileId: id, name, fileName: "", version: null, category: null, size: a.id === "ue4ss" ? 9_400_000 : 4_100_000, downloadedAt: now(), archive: null, unpacked: "unpacked", hasInstaller: false }] };
+      library = [...library, m];
+      emit("library:changed", null);
+      return m;
+    }
     case "nexus_marks":
       return demoMarks;
     case "mod_endorse":

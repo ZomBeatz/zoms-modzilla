@@ -1,5 +1,10 @@
 # Changelog
 
+## Next version
+
+- **Send from your phone** takes download links and mod or collection addresses only, never your API key: its page isn't encrypted, which is fine for links that run out but not for a key that doesn't.
+- The browser demo has a made-up Unreal Engine game (for UE4SS) and made-up loaders for each game, with the launch options they need.
+
 ## 0.0.1
 
 The first public release: a free mod manager for Linux and the Steam Deck.
